@@ -4,5 +4,7 @@
 - rain_loop - OpenGameArt "Rain (loopable)", CC0
 - spray_* - OpenGameArt "40 CC0 water / splash / slime SFX" (rubberduck), CC0
 - jingle_* - Kenney "Music Jingles" (kenney.nl), CC0
+- step_grass, step_dirt - Kenney "Impact Sounds" (footstep_grass, footstep_snow), CC0; step_puddle - OpenGameArt water SFX (rubberduck), CC0
+- thunder - made in code (tools/build_audio.py)
 - hr_steam, poof, hurt_cute, cry_boss, shot_fire - made in code for Jisu Room (scripts/sfx/build_sfx.py there)
 - hit, crit, coin, error, hit_soft - Kenney "Impact Sounds" / "Interface Sounds" / "RPG Audio", CC0 (by way of Jisu Room)

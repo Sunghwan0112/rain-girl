@@ -2,7 +2,8 @@
 // A real pixel game: everything is drawn at 960x540, one art pixel = one game pixel, and the page scales the whole
 // picture up (2x on a 1080p screen) without smoothing. Nothing is shown at a fractional size of its art.
 //   the girl: SpriteCast pixel art, 96 px - four facings (the diagonals) of walking with the umbrella and its swing
-//   the fire monster (64 px, three faces), the ground tile, the trees: pixel art drawn by GPT on a grid and read back (assets/px/)
+//   the fire monster (64 px, three faces), the ground tile: pixel art drawn by GPT on a grid and read back (assets/px/)
+//   the trees, bushes, stumps: 3D models (Tripo) at her exact angle and scale, drawn as pixel art by SpriteCast, four sides each (assets/px/props/)
 //   the effects, the hearts, the fireball: a few pixels each, made here; the letters: Galmuri11 (SIL OFL)
 
 const W = 960, H = 540;
@@ -14,7 +15,7 @@ const PX = { w: PIXEL.frame[0], h: PIXEL.frame[1], ax: PIXEL.feet[0], ay: PIXEL.
 const GIRL = { walk: { frames: 8, fps: 11 }, slash: { frames: 8, fps: 15 }, stand: { frames: 3, fps: 0.75 } };          // (standing: 3 frames over 4 s, a breath and a sway)
 const SHADOW = PIXEL.shadows;
 const TRAIL = Object.fromEntries(DIAG.map((f) => [f, PIXEL.trails[`slash-${f}`]]));
-const SPEED = 130;
+const SPEED = 145;          // (a little faster since the ground went isometric: up and down is half as fast on the screen)
 const REACH = 130, HALF_ANGLE = Phaser.Math.DegToRad(68);
 // THE FIRES: four colours, each its own trouble. hp: the water it takes; spread: how fast its fire on the ground spreads; hits: the
 // swings its ground fire takes to put out; life: how long that burns; kb: how far the water throws it; shots: fireballs at once
@@ -41,15 +42,37 @@ const WAVES = ROUNDS.map((r, n) => r.map((k) => k === 'boss' ? { kind: 'blue', h
 // THE CURVE: how hard a round is, 0 (round 1) to 1 (round 10) - the fire catches and spreads more, the fireballs come faster
 const HARD = (w) => Math.min(1, Math.max(0, w / (ROUNDS.length - 1)));
 const lerp = (a, b, u) => a + (b - a) * u;
+const flameKey = (i, kind, size = '') => (kind === 'red' ? `flame-${i}` : `flame-${i}-${kind}`) + size;          // (size: '' whole, '-m' about 2/3, '-s' under a half)
 // THE GROUND BURNS: a grid of 16 px squares. Where a fire monster lands and where a fireball falls the grass catches; a fire spreads to
 // the squares beside it now and then, burns ~18 s and leaves scorched ground. The girl cannot walk into a burning square (her water puts
 // it out); caught in one - it catches under her - she is hurt and thrown clear.
 // her: five hearts; a water tank the swing draws on (the rain fills it again); a monster put out may leave a drop that heals
-const HEARTS = 5, WATER_MAX = 100, SWING_COST = 18, WATER_REGEN = 13, DROP_CHANCE = 0.3;
+const HEARTS = 5, WATER_MAX = 100, SWING_COST = 18, WATER_REGEN = 15, DROP_CHANCE = 0.3;
+// the girl's shadows: the light from the front right - a shadow goes back and to the left, ~0.55 of the height long (her 3D shadows in
+// pixel.json: the shadow's middle 28 px from her feet, up and left, for a figure 96 px tall)
+const SHADOW_DIR = (() => { const s = PIXEL.shadows['carry-south-east']; const v = [s[2] + s[0] / 2 - PIXEL.feet[0], s[3] + s[1] / 2 - PIXEL.feet[1]], l = Math.hypot(...v); return [v[0] / l, v[1] / l]; })();
+const SHADOW_LEN = 0.55;
+// PUDDLES: two or three each round, somewhere new - fire does not catch on them, a fireball dies in them, and standing in one fills
+// the tank three times as fast. They dry up from the edge: gone ~35 s into the round.
+const PUDDLES = [2, 3], PUDDLE_LIFE = 35, PUDDLE_DRY = 22, PUDDLE_FILL = 3;
+// THE GROUND IS ISOMETRIC, as the girl is (SpriteCast renders her from 30 degrees down: 2:1): its squares are 32 x 16 diamonds, a
+// column u going down-right and a row v down-left. A "world" distance counts a screen pixel up or down twice (2:1).
+const DW = 32, DH = 16, ISO_X = 480;
+const wdist = (dx, dy) => Math.hypot(dx, dy * 2);
 const TILE = 16, FIRE_LIFE = 15, FIRE_MAX = 330;          // (how fast it spreads goes with the round: HARD)
 const TREES = [[68, 112, 'tree'], [195, 92, 'tree-burnt'], [352, 106, 'tree'], [615, 98, 'tree'], [772, 112, 'tree-burnt'], [900, 94, 'tree'],
                [44, 318, 'tree'], [920, 352, 'tree-burnt'], [104, 528, 'tree-burnt'], [862, 530, 'tree']];
 const DECOR = [[248, 196, 'bush'], [735, 226, 'stump'], [450, 488, 'bush'], [615, 420, 'stump'], [196, 390, 'bush'], [810, 450, 'bush'], [525, 182, 'stump']];
+const SWAY = { tree: 2, 'tree-half': 2, bush: 1, 'tree-burnt': 1, stump: 0 };          // how far a prop's top moves in the wind, in pixels (whole pixels: frames, not a stretch)
+const ROCKS = [[330, 255], [690, 330], [140, 240]];          // boulders: in the way, and nothing burns on them
+const MUSHROOMS = [[382, 214], [560, 470], [884, 436], [292, 470], [640, 222]];
+// the footpath: a band of earth from the bottom left into the trees at the top right, along the ground's 2:1, winding a little
+const PATH_Y = (x) => 500 - 0.5 * x + 18 * Math.sin(x / 90), PATH_HALF = 24;
+// THE WEATHER: the dark of a rainy day, lit by the fires; more smoke, darker, as the forest burns; lightning now and then; a wind
+// that changes each round - the rain slants with it, the trees lean with it, smoke and sparks drift with it, the fire spreads with it
+const DARK = 0.2, DARK_SMOKE = 0.12, LIGHTNING = [11, 24];          // (the dark's strength, and what the burning adds; seconds between flashes)
+const WINDS = [-1, -0.6, 0.6, 1];
+const TREE_SAVE = 4;                              // a burning tree put out within this many seconds is as it was; later, half burnt; left to burn 10 s, burnt
 const TOP = 132;                                  // the band of trees along the top: nobody walks above it
 
 // little pictures made here, one character a pixel
@@ -77,7 +100,7 @@ function diagOf(dx, dy, was) {
   return `${v}-${h}`;
 }
 function facingOf(dx, dy) { const i = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)); return FACINGS[(i + 8) % 8]; }
-function vecOf(f) { const a = FACINGS.indexOf(f) * Math.PI / 4; return [Math.cos(a), Math.sin(a)]; }
+function vecOf(f) { const a = FACINGS.indexOf(f) * Math.PI / 4; return [Math.cos(a), Math.sin(a)]; }          // (in world terms: x, 2y)
 const R = Math.round;
 
 class Chapter1 extends Phaser.Scene {
@@ -90,32 +113,114 @@ class Chapter1 extends Phaser.Scene {
     }
     for (const f of DIAG) this.load.spritesheet(`trail-${f}`, `assets/girlpx/trails/slash-${f}.png`, { frameWidth: TRAIL[f].w, frameHeight: TRAIL[f].h });
     // the music (Suno) and the sounds (assets/audio/CREDITS.md)
+    for (const n of ['thunder_0', 'thunder_1', 'step_puddle_0', 'step_puddle_1', ...[0, 1, 2, 3, 4].flatMap((i) => [`step_grass_${i}`, `step_dirt_${i}`])]) this.load.audio(n, `assets/audio/${n}.ogg`);
     for (const n of ['bgm_stage', 'bgm_boss', 'bgm_title', 'fire_loop', 'rain_loop', 'spray_0', 'spray_1', 'jingle_clear', 'jingle_win', 'jingle_over', 'jingle_boss_in', 'hr_steam_0', 'poof_0',
                      'hurt_cute_0', 'hurt_cute_1', 'cry_boss_0', 'shot_fire_0', 'hit_1', 'crit_0', 'coin_0', 'error_0', 'hit_soft_0', 'hit_soft_1']) this.load.audio(n, `assets/audio/${n}.ogg`);
     for (const f of DIAG) this.load.image(`hurt-${f}`, `assets/girlpx/hurt-${f}.png`);          // (hit: the standing frame with the eyes squeezed shut - the faces that show)
     for (const n of ['normal', 'hurt', 'dead']) this.load.image(`fire-${n}`, `assets/px/fire-${n}.png`);
-    for (const n of ['ground', 'tree', 'tree-burnt', 'bush', 'stump', 'crown']) this.load.image(n, `assets/px/${n}.png`);          // (the crown: drawn by GPT, read back on its grid)
+    for (let j = 0; j < 5; j++) this.load.image(`puddle-${j}`, `assets/px/puddle-${j}.png`);          // (round puddles, big to tiny: drawn by GPT)
+    for (const n of ['burn', 'ash', 'flame-0', 'flame-1', 'flame-2']) this.load.image(n, `assets/px/${n}.png`);          // (the burning ground, its ash, the flames on it: drawn by GPT)
+    for (const n of ['ground', 'dirt', 'crown']) this.load.image(n, `assets/px/${n}.png`);          // (the crown: drawn by GPT, read back on its grid)
+    for (const k of Object.keys(FOOT)) this.load.image(k, `assets/px/props/${k}.png`);          // (each prop from four sides: tree-0 .. stump-270)
   }
 
   // THE GROUND AS IT BURNS AND AFTER: 16 px squares made here, a few of each so the grid does not show - the burning ground (dark,
   // embers glowing, three frames), and the ash it leaves (grey, a few cinders); their edges ragged, so neighbours run into each other
   groundTiles() {
-    const rnd = (n) => Math.floor(Math.random() * n), T = TILE;
-    const tile = (key, base, specks, ragged) => {
-      const tx = this.textures.createCanvas(key, T, T), c = tx.getContext();
-      for (let y = 0; y < T; y++) for (let x = 0; x < T; x++) {
-        const edge = Math.min(x, y, T - 1 - x, T - 1 - y);
-        if (ragged && edge === 0 && Math.random() < 0.45) continue;
-        let col = base[rnd(base.length)];
-        for (const [p, cs] of specks) if (Math.random() < p) col = cs[rnd(cs.length)];
-        c.fillStyle = col; c.fillRect(x, y, 1, 1);
+    // the burning ground and the ash: GPT's two seamless 64 px squares, cut into 32 x 16 DIAMONDS - each diamond the piece of the repeat
+    // that lies where it stands on the screen (4 x 8 places), so burning diamonds side by side are one ground; their edges a little ragged
+    const cut = (src, key, bright) => {
+      const img = this.textures.get(src).getSourceImage(), S = img.width;
+      const sc = document.createElement('canvas'); sc.width = S; sc.height = S; const sx = sc.getContext('2d'); sx.drawImage(img, 0, 0); const sd = sx.getImageData(0, 0, S, S).data;
+      for (let j = 0; j < 8; j++) for (let i = 0; i < 4; i++) {
+        // each diamond spills past its edge in ragged 2-pixel clumps (PX_ x PY_ more round it): where the next one burns too they overlap
+        // and match (the same ground), where it does not the burnt patch ends unevenly, not along the grid
+        const PX_ = 8, PY_ = 4, TW = DW + 2 * PX_, TH = DH + 2 * PY_;
+        const tx = this.textures.createCanvas(`${key}_${i}_${j}`, TW, TH), c = tx.getContext(), d = c.createImageData(TW, TH);
+        const x0 = ((ISO_X - DW / 2 - PX_ + i * DW / 2) % S + S) % S, y0 = ((j * DH / 2 - PY_) % S + S) % S;
+        for (let y = 0; y < TH; y++) for (let x = 0; x < TW; x++) {
+          const e = Math.abs(x + 0.5 - TW / 2) / (DW / 2) + Math.abs(y + 0.5 - TH / 2) / (DH / 2); if (e > 1.45) continue;
+          const hsh = (((x >> 1) * 73 + (y >> 1) * 151 + i * 29 + j * 61) * 2654435761 >>> 0) % 100 / 100;          // (in 2-pixel clumps, the same way each time)
+          if (e > 0.9 && hsh > (1.45 - e) / 0.55) continue;
+          const so = (((y0 + y) % S) * S + ((x0 + x) % S)) * 4, o = (y * TW + x) * 4;
+          let r = sd[so], gg = sd[so + 1]; const b = sd[so + 2];
+          if (bright && r > 120 && r > b + 40) { r = Math.min(255, r * 1.15); gg = Math.min(255, gg * 1.3 + 12); }
+          d.data[o] = r; d.data[o + 1] = gg; d.data[o + 2] = b; d.data[o + 3] = 255;
+        }
+        c.putImageData(d, 0, 0); tx.refresh();
       }
-      tx.refresh();
     };
-    for (let v = 0; v < 4; v++) {
-      for (let f = 0; f < 3; f++) tile(`burnt${v}_${f}`, ['#3a1d10', '#2e170d', '#43220f'], [[0.10, ['#8a2a14', '#a8361a']], [0.05, ['#e0601c', '#ff8a2a']], [0.015, ['#ffd060']]], true);
-      tile(`ash${v}`, ['#4b4743', '#55504b', '#423e3a'], [[0.08, ['#6e6862', '#7a746d']], [0.04, ['#2c2926']], [0.01, ['#9a2c16']]], true);
+    cut('burn', 'burn', false); cut('burn', 'burnB', true); cut('ash', 'ash', false);
+  }
+
+
+
+  // CAST SHADOWS for what has no 3D (the trees, bushes, stumps - drawn by GPT): the picture's own outline laid on the ground the way the
+  // girl's 3D shadows fall (pixel.json: the light from the front right, the shadow going back to the left, about half the height long),
+  // in her shadows' colour and strength. Every pixel of the picture goes to the ground point under it, pushed back by its height.
+  castShadow(key) {
+    const src = this.textures.get(key).getSourceImage(), w = src.width, h = src.height;
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const sc = cv.getContext('2d'); sc.drawImage(src, 0, 0); const a = sc.getImageData(0, 0, w, h).data;
+    const [fx, fy] = FOOT[key] || [w / 2, h - 2], base = fy, [lx, ly] = SHADOW_DIR, k = SHADOW_LEN, pad = Math.ceil(h * k) + 4;
+    const out = this.textures.createCanvas(`${key}-cast`, w + 2 * pad, Math.ceil(h * k * Math.abs(ly)) + 12), c = out.getContext();
+    c.fillStyle = `rgb(${PIXEL.shadowColour})`;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      if (a[(y * w + x) * 4 + 3] < 128) continue;
+      const up = Math.max(0, base - y), gx = Math.round(x + pad + lx * up * k), gy = Math.round(out.height - 6 + ly * up * k + Math.min(0, base - y) * 0.5);          // (below the foot: the roots in front, flat)
+      c.fillRect(gx, gy, 1, 1); c.fillRect(gx, gy + 1, 1, 1);          // (two rows: the squashed shape has no gaps)
     }
+    out.refresh(); return { key: `${key}-cast`, ox: pad + fx, oy: out.height - 6 };           // (where the picture's foot is on it)
+  }
+  // THE FOOTPATH, made here once: the earth tile inside a winding band, sampled by screen position (no seams); its edge ragged in 2-pixel
+  // steps, a darker rim of earth along it, and a few blades of grass leaning in over it
+  footpath() {
+    const t = this.textures.createCanvas('footpath', W, H), c = t.getContext(), out = c.createImageData(W, H), o = out.data;
+    const rd = (k) => { const s = this.textures.get(k).getSourceImage(), cv = document.createElement('canvas'); cv.width = s.width; cv.height = s.height; const x = cv.getContext('2d'); x.drawImage(s, 0, 0); return { w: s.width, h: s.height, d: x.getImageData(0, 0, s.width, s.height).data }; };
+    const dirt = rd('dirt'), grass = rd('ground'), rnd = new Phaser.Math.RandomDataGenerator(['path']);
+    const nz = new Map(), noise = (x, y) => { const k = (x >> 1) + ',' + (y >> 1); if (!nz.has(k)) nz.set(k, rnd.between(-3, 3)); return nz.get(k); };
+    const inside = (x, y) => Math.abs(y - PATH_Y(x)) * 2 / Math.hypot(1, 1) < PATH_HALF + noise(x, y);          // (across the band, in world terms)
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (Math.abs(y - PATH_Y(x)) > PATH_HALF + 8 || !inside(x, y)) continue;
+      const rim = !inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1) || !inside(x, y + 1), i = ((y % dirt.h) * dirt.w + (x % dirt.w)) * 4, j = (y * W + x) * 4;
+      let r = dirt.d[i], g = dirt.d[i + 1], b = dirt.d[i + 2];
+      if (rim) { r *= 0.72; g *= 0.72; b *= 0.72; }
+      else if (rnd.frac() < 0.04 && !inside(x, y - 3)) { const k = ((y % grass.h) * grass.w + (x % grass.w)) * 4; r = grass.d[k]; g = grass.d[k + 1]; b = grass.d[k + 2]; }          // (grass over the upper edge)
+      o[j] = r; o[j + 1] = g; o[j + 2] = b; o[j + 3] = 255;
+    }
+    c.putImageData(out, 0, 0); t.refresh();
+  }
+
+  // a prop's picture, stood on its foot (FOOT: assets/px/props/foot.js)
+  setProp(img, key, s = 0) {
+    const a = this.swayPad(key), t = `${key}~${s}`, [fx, fy] = FOOT[key]; img.setTexture(t);
+    return img.setOrigin((fx + a) / img.width, (fy + 0.5) / img.height);
+  }
+  swayPad(key) { return SWAY[key.replace(/-\d+$/, '')] || 0; }
+  // THE WIND: three frames of each prop - still, its top a pixel or two to the right, to the left. A row moves more the higher it is
+  // (none at the foot); whole pixels, so it stays pixel art. Each frame padded the same so the foot does not move.
+  swayFrames(key) {
+    const src = this.textures.get(key).getSourceImage(), w = src.width, h = src.height, a = this.swayPad(key), fy = FOOT[key][1];
+    for (const s of [0, 1, -1]) {
+      const t = this.textures.createCanvas(`${key}~${s}`, w + 2 * a, h), c = t.getContext();
+      for (let y = 0; y < h; y++) { const up = Math.max(0, (fy - y) / fy), dx = Math.round(s * a * Math.pow(up, 1.4)); c.drawImage(src, 0, y, w, 1, a + dx, y, w, 1); }
+      t.refresh();
+    }
+  }
+  // a burnt bush: the bush's own pixels taken to charcoal by their lightness, a few embers in it
+  burntBush(key) {
+    const src = this.textures.get(key).getSourceImage(), w = src.width, h = src.height, t = this.textures.createCanvas(key.replace('bush', 'bush-burnt'), w, h), c = t.getContext();
+    c.drawImage(src, 0, 0); const d = c.getImageData(0, 0, w, h), rnd = new Phaser.Math.RandomDataGenerator([key]);
+    const CH = [[22, 18, 16], [38, 32, 28], [58, 50, 44], [84, 74, 64]];
+    for (let i = 0; i < d.data.length; i += 4) {
+      if (d.data[i + 3] < 128) continue;
+      const l = (d.data[i] * 0.3 + d.data[i + 1] * 0.59 + d.data[i + 2] * 0.11) / 255, q = CH[Math.min(3, Math.floor(l * 4.2))];
+      const ember = rnd.frac() < 0.012 && l > 0.3; d.data[i] = ember ? 236 : q[0]; d.data[i + 1] = ember ? 112 : q[1]; d.data[i + 2] = ember ? 40 : q[2];
+    }
+    c.putImageData(d, 0, 0); t.refresh(); FOOT[key.replace('bush', 'bush-burnt')] = FOOT[key];
+  }
+  shadowOf(key, x, y, alpha = PIXEL.shadowAlpha) {
+    const s = this.casts[key] || (this.casts[key] = this.castShadow(key));
+    return this.add.image(R(x), R(y), s.key).setOrigin(s.ox / this.textures.get(s.key).getSourceImage().width, s.oy / this.textures.get(s.key).getSourceImage().height).setAlpha(alpha).setDepth(-500);
   }
 
   // a picture from a map of characters
@@ -139,6 +244,12 @@ class Chapter1 extends Phaser.Scene {
     c.putImageData(d, 0, 0); t.refresh();
   }
 
+  // a smaller copy of a pixel picture: each new pixel one of the old (nearest), so it stays pixel art - for flames young or dying
+  smaller(key, suf, k) {
+    const src = this.textures.get(key).getSourceImage(), w = Math.max(3, R(src.width * k)), h = Math.max(4, R(src.height * k)), t = this.textures.createCanvas(key + suf, w, h), c = t.getContext();
+    c.imageSmoothingEnabled = false; c.drawImage(src, 0, 0, w, h); t.refresh();
+  }
+
   // an oval in hard pixels (shadows), drawn into a texture once
   oval(key, w, h, rgba) {
     const t = this.textures.createCanvas(key, w, h), c = t.getContext(); c.fillStyle = rgba;
@@ -148,12 +259,16 @@ class Chapter1 extends Phaser.Scene {
 
   create() {
     for (const [k, v] of Object.entries(PIX)) this.pix(k, v);
-    for (const [k, K] of Object.entries(KINDS)) FLAMES.forEach((map, i) => this.pix(`flame${i}-${k}`, { map, col: { r: K.flame[0], y: K.flame[1], W: K.flame[2] } }));
+    for (const k of ['blue', 'green', 'purple']) for (let i = 0; i < 3; i++) this.recolour(`flame-${i}`, k);          // (GPT's flame, in each fire's colour)
+    for (const k of ['red', 'blue', 'green', 'purple']) for (let i = 0; i < 3; i++) { this.smaller(flameKey(i, k), '-m', 0.66); this.smaller(flameKey(i, k), '-s', 0.42); }
     this.oval('scorch', 18, 10, 'rgba(30,20,12,0.55)');
     this.groundTiles();
+    this.puddles = []; this.wet = new Map();          // "col,row" -> the puddle's square
     this.fire = new Map(); this.ash = new Map(); this.spreadT = 0;          // "col,row" -> { age, life, spr, gnd } / the ash a fire left
     for (const k of ['blue', 'green', 'purple']) { for (const n of ['normal', 'hurt', 'dead']) this.recolour(`fire-${n}`, k); this.recolour('fireball', k); }
-    this.oval('shadow-tree', 64, 16, 'rgba(16,24,12,0.35)'); this.oval('shadow-small', 34, 9, 'rgba(16,24,12,0.3)'); this.oval('shadow-fire', 40, 10, 'rgba(42,26,8,0.32)');
+    this.casts = {};
+    this.oval('shadow-fire', 30, 7, 'rgba(42,26,8,0.18)');          // (a fire makes its own light: only a faint contact shadow)
+    this.oval('firelight', 120, 40, 'rgba(255,140,60,0.16)'); this.oval('firelight-in', 70, 22, 'rgba(255,170,80,0.16)');
     // the glow behind a fire monster: three hard rings, laid on with ADD
     const gc = this.textures.createCanvas('glow', 96, 96), gx = gc.getContext();
     for (const [r, a] of [[46, 0.12], [34, 0.16], [22, 0.22]]) { gx.fillStyle = `rgba(255,140,50,${a})`; for (let y = -r; y <= r; y++) { const w = Math.floor(Math.sqrt(r * r - y * y)); gx.fillRect(48 - w, 48 + y, w * 2, 1); } }
@@ -162,11 +277,29 @@ class Chapter1 extends Phaser.Scene {
     // the ground: one tile, each copy flipped at random so the repeat does not show
     const gw = this.textures.get('ground').getSourceImage().width;
     for (let y = 0; y < H; y += gw) for (let x = 0; x < W; x += gw) this.add.image(x, y, 'ground').setOrigin(0).setFlip(Math.random() < 0.5, Math.random() < 0.5).setDepth(-1000);
-    this.trees = TREES.map(([x, y, k]) => {
-      this.add.image(x, y - 3, k === 'tree' ? 'shadow-tree' : 'shadow-small').setDepth(y - 1);
-      return { x, y, r: k === 'tree' ? 18 : 13, kind: k, state: k === 'tree' ? 'green' : 'burnt', img: this.add.image(x, y, k).setOrigin(0.5, 0.97).setDepth(y) };
+    this.footpath(); this.add.image(0, 0, 'footpath').setOrigin(0).setDepth(-990);
+    // the props: each from one of its four sides, at random - a tree that burns stands burnt from the same side
+    const side = () => [0, 90, 180, 270][Phaser.Math.Between(0, 3)];
+    for (const v of [0, 90, 180, 270]) this.burntBush(`bush-${v}`);
+    for (const key of Object.keys(FOOT)) this.swayFrames(key);
+    // what burns: the trees, and the bushes (low: walked through, not round); a burnt tree stays a burnt tree
+    this.trees = [...TREES, ...DECOR.filter((d) => d[2] === 'bush')].map(([x, y, k]) => {
+      const v = side(), key = `${k}-${v}`, bush = k === 'bush';
+      return { x, y, v, base: bush ? 'bush' : 'tree', solid: !bush, r: bush ? 12 : k === 'tree' ? 18 : 13, kind: k, state: k === 'tree' || bush ? 'green' : 'burnt', shadow: this.shadowOf(key, x, y), img: this.setProp(this.add.image(x, y, key), key).setDepth(y), ph: Math.random() * 6 };
     });
-    for (const [x, y, k] of DECOR) { this.add.image(x, y - 2, 'shadow-small').setDepth(y - 1); this.add.image(x, y, k).setOrigin(0.5, 0.95).setDepth(y); }
+    const still = [...DECOR.filter((d) => d[2] !== 'bush'), ...ROCKS.map(([x, y]) => [x, y, 'rock']), ...MUSHROOMS.map(([x, y]) => [x, y, 'mushrooms'])];
+    this.decor = still.map(([x, y, k]) => { const key = `${k}-${side()}`; this.shadowOf(key, x, y); return { x, y, kind: k, img: this.setProp(this.add.image(x, y, key), key).setDepth(y) }; });
+    this.rocks = this.decor.filter((d) => d.kind === 'rock').map((d) => ({ x: d.x, y: d.y, r: 20, solid: true }));
+    this.lightT = 0;
+    // the dark: a quarter-size picture, scaled up 4x without smoothing (light in 4-pixel steps), over the world and under the rain
+    this.darkT = this.textures.createCanvas('dark', W / 4, H / 4); this.darkImg = this.add.image(0, 0, 'dark').setOrigin(0).setScale(4).setDepth(4500);
+    this.warmT = this.textures.createCanvas('warm', W / 4, H / 4); this.warmImg = this.add.image(0, 0, 'warm').setOrigin(0).setScale(4).setDepth(4490).setBlendMode(Phaser.BlendModes.ADD);
+    this.darkClock = 0;
+    this.flashImg = this.add.rectangle(0, 0, W, H, 0xe8f0ff, 0).setOrigin(0).setDepth(4510);
+    this.boltT = Phaser.Math.Between(...LIGHTNING); this.wind = WINDS[Phaser.Math.Between(0, 3)]; this.splashes = []; this.stepFr = -1;
+    this.pix('smoke', { map: ['.ss.', 'ssss', 'ssss', '.ss.'], col: { s: '#4a4640' } });
+    this.pix('smoke-big', { map: ['..ss..', '.ssss.', 'ssssss', 'ssssss', '.ssss.', '..ss..'], col: { s: '#3e3a36' } });
+    this.ripples = []; this.pmask = {}; this.rippleG = this.add.graphics().setDepth(-940);
 
     // the girl
     this.girl = { x: W / 2, y: H / 2 + 50, facing: 'south', show: 'south-east', walkT: 0, attack: null, hearts: HEARTS, water: WATER_MAX, hurtT: 0, push: [0, 0] };
@@ -213,7 +346,8 @@ class Chapter1 extends Phaser.Scene {
     if (this.music && this.music.key === key && this.music.isPlaying && this.music.rate === rate) return;
     if (this.music) this.music.stop(); this.music = this.sound.add(key, { loop: true, volume: vol, rate }); this.music.play();
   }
-  sfx(key, vol = 0.6) { if (Array.isArray(key)) key = key[Math.floor(Math.random() * key.length)]; this.sound.play(key, { volume: vol, detune: Phaser.Math.Between(-80, 80) }); }
+  // a sound; given where it is (x), from that side - left or right of the middle, not all the way
+  sfx(key, vol = 0.6, x = null) { if (Array.isArray(key)) key = key[Math.floor(Math.random() * key.length)]; this.sound.play(key, { volume: vol, detune: Phaser.Math.Between(-80, 80), pan: x === null ? 0 : Phaser.Math.Clamp((x - W / 2) / (W / 2), -1, 1) * 0.7 }); }
   jingle(key, then) { if (this.music) this.music.stop(); this.music = null; const j = this.sound.add(key, { volume: 0.6 }); j.once('complete', () => then && then()); j.play(); }
 
   showTitle(a, b) { this.banner.setText(a); this.sub.setText(b); this.dim.setVisible(true); this.boardText.setVisible(true); }
@@ -238,7 +372,7 @@ class Chapter1 extends Phaser.Scene {
     form.onsubmit = (ev) => { ev.preventDefault(); done(true); }; skip.onclick = () => done(false);
   }
   endGame(won) {
-    const rounds = this.wave + (won ? 0 : 1), ground = Math.floor(W / TILE) * Math.floor((H - TOP) / TILE);
+    const rounds = this.wave + (won ? 0 : 1), ground = Math.floor(W * (H - TOP) / (DW * DH / 2));
     const entry = { score: this.total, round: Math.min(WAVES.length, rounds), stars: this.starsTotal || 0, burnt: Math.round(100 * (this.burntSum || 0) / Math.max(1, ground * Math.max(1, rounds))), won };
     this.time.delayedCall(1300, () => this.askName(entry));
   }
@@ -248,8 +382,9 @@ class Chapter1 extends Phaser.Scene {
     for (const s of this.shots) s.obj.destroy();
     this.monsters = []; this.shots = [];
     for (const f of this.fire.values()) { f.spr.destroy(); f.gnd.destroy(); } this.fire.clear();
-    for (const a of this.ash.values()) a.destroy(); this.ash.clear();
-    for (const tr of this.trees) { for (const fl of tr.flames || []) fl.destroy(); tr.flames = null; tr.state = tr.kind === 'tree' ? 'green' : 'burnt'; tr.img.setTexture(tr.kind); }
+    for (const a of this.ash.values()) a.destroy(); this.ash.clear(); for (const sc of this.scorches || []) sc.destroy(); this.scorches = [];
+    this.clearPuddles();
+    for (const tr of this.trees) { for (const fl of tr.flames || []) fl.destroy(); tr.flames = null; if (tr.glowG) { tr.glowG.destroy(); tr.glowG = null; } tr.state = tr.kind === 'tree-burnt' ? 'burnt' : 'green'; tr.burnT = 0; tr.saveT = 0; tr.img.clearTint(); this.setProp(tr.img, `${tr.kind}-${tr.v}`); tr.shadow.destroy(); tr.shadow = this.shadowOf(`${tr.kind}-${tr.v}`, tr.x, tr.y); }
     Object.assign(this.girl, { x: W / 2, y: H / 2 + 50, facing: 'south', show: 'south-east', attack: null, hearts: HEARTS, water: WATER_MAX, hurtT: 0, push: [0, 0] });
     for (const it of this.items) it.spr.destroy(); this.items = []; this.total = 0; this.starsTotal = 0; this.burntSum = 0;
     this.swingAsked = false;
@@ -259,8 +394,10 @@ class Chapter1 extends Phaser.Scene {
   nextWave() {
     this.wave++;
     if (this.wave >= WAVES.length) { this.state = 'clear'; this.jingle('jingle_win', () => this.playMusic('bgm_title')); /* (won: bright, then the lullaby as it is) */ this.showTitle('1장 클리어!', `숲의 불이 모두 꺼졌어요\n\n점수 ${this.total}${this.saveBest()}\n\nR 을 눌러 다시 하기`); this.endGame(true); return; }
-    this.flash(`라운드 ${this.wave + 1} / ${WAVES.length}`);
+    this.wind = WINDS[Phaser.Math.Between(0, 3)];          // (a new wind each round)
+    this.flash(`라운드 ${this.wave + 1} / ${WAVES.length}   바람 ${this.wind > 0 ? '→' : '←'}${Math.abs(this.wind) > 0.8 ? (this.wind > 0 ? '→' : '←') : ''}`);
     this.round = { t0: this.time.now, hits: 0, burnt: 0, kills: 0 };
+    this.clearPuddles(); const n = Phaser.Math.Between(...PUDDLES); for (let i = 0; i < n; i++) this.makePuddle();
     if (WAVES[this.wave].some((m) => m.boss)) { this.sfx('jingle_boss_in', 0.6); this.time.delayedCall(1400, () => this.state === 'play' && this.playMusic('bgm_boss', 0.5)); }
     else this.playMusic('bgm_stage');
     this.toSpawn = WAVES[this.wave].length;
@@ -286,16 +423,17 @@ class Chapter1 extends Phaser.Scene {
     const m = { x, y, hp: def.hp, maxHp: def.hp, big, sfx, kind: def.kind, K, hitBy: -1, hurtT: 0, shootT: Phaser.Math.Between(1800, 3500), wobble: Math.random() * 10, kb: [0, 0], dead: false,
                 hopT: Math.random(), face: 'normal', faceT: 0, fadeT: 0, flashT: 0, pulse: 0, flip: false };
     m.shadow = this.add.image(x, y, 'shadow-fire');
-    m.glow = this.add.image(x, y, 'glow').setBlendMode(Phaser.BlendModes.ADD).setTint(K.glow);
+    m.light = [];          // (its light on the ground: drawDark, soft and in its own colour)
+    m.glow = this.add.image(x, y, 'glow').setBlendMode(Phaser.BlendModes.ADD).setTint(K.glow).setAlpha(0.4);
     m.spr = this.add.image(x, y, 'fire-normal' + sfx).setOrigin(0.5, 0.97).setAlpha(0);
     m.over = this.add.image(x, y, 'fire-hurt' + sfx).setOrigin(0.5, 0.97).setVisible(false);   // the face it is turning from, shown on alternate frames
     this.tweens.add({ targets: m.spr, alpha: 1, duration: 320, ease: 'Stepped', easeParams: [4] });          // (comes in by steps, not by growing)
-    if (big) { m.crown = this.add.image(x, y, 'crown').setOrigin(0.5, 1); this.sfx('cry_boss_0', 0.7); }          // (the boss: a crown, and its own bar at the top)
+    if (big) { m.crown = this.add.image(x, y, 'crown').setOrigin(0.5, 1); this.sfx('cry_boss_0', 0.7, x); this.cameras.main.shake(450, 0.006); }          /* (the boss comes: the ground shakes) */          // (the boss: a crown, and its own bar at the top)
     this.monsters.push(m);
   }
 
   newDrop(anywhere) {
-    return { x: Math.random() * (W + 150) - 75, y: anywhere ? Math.random() * H : -15, v: 420 + Math.random() * 220, l: 6 + Math.floor(Math.random() * 6) };
+    return { x: Math.random() * (W + 300) - 150, y: anywhere ? Math.random() * H : -15, v: 420 + Math.random() * 220, l: 6 + Math.floor(Math.random() * 6), gy: TOP - 40 + Math.random() * (H - TOP + 40) };          // (gy: where it lands)
   }
 
   update(time, dtMs) {
@@ -308,7 +446,7 @@ class Chapter1 extends Phaser.Scene {
     if (this.state !== 'play') {
       if ((this.state === 'title' && (Phaser.Input.Keyboard.JustDown(k.SPACE) || Phaser.Input.Keyboard.JustDown(k.ENTER))) ||
           (this.state !== 'title' && Phaser.Input.Keyboard.JustDown(k.R))) this.start();
-      this.drawGirl(); this.drawRain(dt); this.drawUi();
+      this.updateProps(dt); this.drawGirl(); this.drawRain(dt); this.drawUi();
       return;
     }
     const g = this.girl;
@@ -324,7 +462,8 @@ class Chapter1 extends Phaser.Scene {
       if (g.water >= SWING_COST) { g.water -= SWING_COST; g.attack = { t: 0, id: time, facing: g.facing, show: g.show }; this.time.delayedCall(110, () => this.sfx(['spray_0', 'spray_1'], 0.55)); }
       else if (!this.dryT || time - this.dryT > 900) { this.dryT = time; this.puff(g.x + 10, g.y - 50, 2); this.say('물이 부족해요'); this.sfx('error_0', 0.4); }          // (the tank is empty: a puff of nothing)
     }
-    if (!g.attack) g.water = Math.min(WATER_MAX, g.water + WATER_REGEN * dt);          // (the rain fills it again)
+    if (!g.attack) g.water = Math.min(WATER_MAX, g.water + WATER_REGEN * dt * (this.wetAt(g.x, g.y) ? PUDDLE_FILL : 1));          // (the rain fills it again; a puddle three times as fast)
+    this.updatePuddles(dt);
     this.swingAsked = false;
 
     // walking (not while swinging)
@@ -335,7 +474,7 @@ class Chapter1 extends Phaser.Scene {
     if (!g.attack && (dx || dy)) {
       const n = Math.hypot(dx, dy); dx /= n; dy /= n;
       g.facing = facingOf(dx, dy); g.show = diagOf(dx, dy, g.show); g.moving = true;
-      this.moveGirl(dx * SPEED * dt, dy * SPEED * dt); g.walkT += dt;
+      this.moveGirl(dx * SPEED * dt, dy * 0.5 * SPEED * dt); g.walkT += dt;          // (a diagonal goes along the ground's 2:1, as she is drawn walking)
     }
     this.moveGirl(g.push[0] * dt, g.push[1] * dt); g.push[0] *= Math.pow(0.002, dt); g.push[1] *= Math.pow(0.002, dt);
     this.keepOut(g, 16);
@@ -354,7 +493,7 @@ class Chapter1 extends Phaser.Scene {
       this.waiting = true; this.roundDone();
       this.time.delayedCall(2600, () => { this.waiting = false; if (this.state === 'play') this.nextWave(); });
     }
-    this.updateItems(dt);
+    this.updateItems(dt); this.updateProps(dt);
     this.drawGirl(); this.drawRain(dt); this.drawUi();
   }
 
@@ -362,7 +501,7 @@ class Chapter1 extends Phaser.Scene {
   // this round, against the ground she can walk on). Three stars: no hit, and under 5 % burned, on top of finishing.
   roundDone() {
     if (this.wave < WAVES.length - 1) this.sfx('jingle_clear', 0.55);
-    const r = this.round, secs = (this.time.now - r.t0) / 1000, ground = Math.floor(W / TILE) * Math.floor((H - TOP) / TILE), burnt = r.burnt / ground;
+    const r = this.round, secs = (this.time.now - r.t0) / 1000, ground = Math.floor(W * (H - TOP) / (DW * DH / 2)), burnt = r.burnt / ground;
     const pts = r.kills * 100 + Math.max(0, Math.round(600 - secs * 10)) + Math.round(Math.max(0, 1 - burnt * 4) * 800) - r.hits * 150;
     const stars = 1 + (r.hits === 0 ? 1 : 0) + (burnt < 0.05 ? 1 : 0); this.total += Math.max(0, pts); this.starsTotal = (this.starsTotal || 0) + stars; this.burntSum = (this.burntSum || 0) + r.burnt;
     const lines = [`라운드 ${this.wave + 1} 완료  ${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}`, `시간 ${Math.round(secs)}초 · 맞음 ${r.hits} · 탄 땅 ${Math.round(burnt * 100)}%`, `+${Math.max(0, pts)}`];
@@ -380,14 +519,61 @@ class Chapter1 extends Phaser.Scene {
     const g = this.girl;
     for (const it of this.items) {
       it.age += dt; it.spr.setY(R(it.y - 2 - (Math.floor(it.age * 4) % 2) * 2)).setVisible(it.age < 7 || Math.floor(it.age * 8) % 2 === 0);
-      if (Math.hypot(it.x - g.x, it.y - g.y) < 22) { g.hearts = Math.min(HEARTS, g.hearts + 1); g.water = Math.min(WATER_MAX, g.water + 40); this.puff(it.x, it.y - 10, 4); it.age = 99; this.sfx('coin_0', 0.6); }
+      if (wdist(it.x - g.x, it.y - g.y) < 26) { g.hearts = Math.min(HEARTS, g.hearts + 1); g.water = Math.min(WATER_MAX, g.water + 40); this.puff(it.x, it.y - 10, 4); it.age = 99; this.sfx('coin_0', 0.6); }
       if (it.age > 9) it.spr.destroy();
     }
     this.items = this.items.filter((it) => it.age <= 9);
   }
 
+  // the puddles: a picture each (big, then smaller as it dries: 2, 3, 4, gone); wet = the squares whose middle its picture covers
+  wetAt(x, y) { return this.wet.has(this.cell(x, y).join(',')); }
+  clearPuddles() { for (const p of this.puddles) p.spr.destroy(); this.wet.clear(); this.puddles = []; }
+  wetCells(p) {          // the squares under the puddle's picture now
+    const img = this.textures.get(p.spr.texture.key).getSourceImage(), w = img.width, h = img.height;
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const c = cv.getContext('2d'); c.drawImage(img, 0, 0); const a = c.getImageData(0, 0, w, h).data;
+    const x0 = p.x - Math.floor(w / 2), y0 = p.y - Math.floor(h / 2), out = [], seen = new Set();
+    for (let y = 0; y < h; y += 4) for (let x = 0; x < w; x += 4) {          // (every diamond whose middle the picture covers)
+      const [u, v] = this.cell(x0 + x, y0 + y), k = u + ',' + v; if (seen.has(k)) continue; seen.add(k);
+      const [cx, cy] = this.centre(u, v), px = Math.floor(cx - x0), py = Math.floor(cy - y0);
+      if (px >= 0 && py >= 0 && px < w && py < h && a[(py * w + px) * 4 + 3] > 128) out.push(k);
+    }
+    return out;
+  }
+  setWet(p) {
+    for (const k of p.cells || []) this.wet.delete(k);
+    p.cells = this.wetCells(p);
+    for (const k of p.cells) {
+      this.wet.set(k, p);
+      const f = this.fire.get(k); if (f) { f.spr.destroy(); f.gnd.destroy(); this.fire.delete(k); }          // (a fire there goes out - no ash under water)
+      const a = this.ash.get(k); if (a) { a.destroy(); this.ash.delete(k); }
+    }
+  }
+  makePuddle() {
+    for (let tries = 0; tries < 40; tries++) {
+      const x = Phaser.Math.Between(70, W - 70), y = Phaser.Math.Between(TOP + 30, H - 40);
+      if ([...this.trees, ...this.rocks].some((t) => Math.hypot(t.x - x, (t.y - y) * 1.5) < (t.solid ? 70 : 50)) || this.puddles.some((p) => Math.hypot(p.x - x, p.y - y) < 120)) continue;
+      const p = { x, y, age: 0, stage: -1, spr: this.add.image(x, y, `puddle-${Phaser.Math.Between(0, 1)}`).setDepth(-945).setFlipX(Math.random() < 0.5).setAlpha(0) };
+      this.tweens.add({ targets: p.spr, alpha: 1, duration: 600, ease: 'Stepped', easeParams: [3] });
+      this.setWet(p); this.puddles.push(p); return;
+    }
+  }
+  updatePuddles(dt) {
+    for (const p of this.puddles) {
+      p.age += dt;
+      const stage = p.age < PUDDLE_DRY ? -1 : Math.floor((p.age - PUDDLE_DRY) / ((PUDDLE_LIFE - PUDDLE_DRY) / 4));          // (-1: as it came; 0..2: puddle 2, 3, 4; 3: gone)
+      if (stage !== p.stage) {
+        p.stage = stage;
+        if (stage >= 3) { p.spr.destroy(); for (const k of p.cells) this.wet.delete(k); p.cells = []; p.gone = true; continue; }
+        if (stage >= 0) { p.spr.setTexture(`puddle-${2 + stage}`); this.setWet(p); }
+      }
+    }
+    this.puddles = this.puddles.filter((p) => !p.gone);
+  }
+
   // the burning ground
-  cell(x, y) { return [Math.floor(x / TILE), Math.floor(y / TILE)]; }
+  cell(x, y) { const a = (x - ISO_X) / (DW / 2), b = y / (DH / 2); return [Math.floor((a + b) / 2), Math.floor((b - a) / 2)]; }          // (the diamond a point is in)
+  centre(u, v) { return [ISO_X + (u - v) * DW / 2, (u + v + 1) * DH / 2]; }
+  tileKey(key, u, v) { return `${key}_${(((u - v) % 4) + 4) % 4}_${(((u + v) % 8) + 8) % 8}`; }
   burning(x, y) { const [c, r] = this.cell(x, y); return this.fire.has(c + ',' + r); }
   moveGirl(mx, my) {          // a step, one axis at a time, not into a burning square (her feet: a few pixels either side)
     const g = this.girl, feet = (x, y) => this.burning(x - 5, y) || this.burning(x + 5, y) || this.burning(x, y - 3);
@@ -395,28 +581,37 @@ class Chapter1 extends Phaser.Scene {
     if (my && !feet(g.x, g.y + my)) g.y += my;
   }
   clearNear(x, y) {
-    for (let r = 1; r < 8; r++) for (let a = 0; a < 16; a++) { const px = x + Math.cos(a / 16 * 2 * Math.PI) * r * TILE, py = y + Math.sin(a / 16 * 2 * Math.PI) * r * TILE;
+    for (let r = 1; r < 8; r++) for (let a = 0; a < 16; a++) { const px = x + Math.cos(a / 16 * 2 * Math.PI) * r * DW / 2, py = y + Math.sin(a / 16 * 2 * Math.PI) * r * DH / 2;
       if (py > TOP && py < H - 10 && px > 20 && px < W - 20 && !this.burning(px, py)) return [px, py]; }
     return [x, y];
   }
   ignite(x, y, rad = 0, kind = 'red') {
     const [c0, r0] = this.cell(x, y);
     for (let dr = -rad; dr <= rad; dr++) for (let dc = -rad; dc <= rad; dc++) {
-      const c = c0 + dc, r = r0 + dr, k = c + ',' + r, cx = c * TILE + TILE / 2, cy = r * TILE + TILE / 2;
-      if (this.fire.has(k) || this.ash.has(k) || this.fire.size >= FIRE_MAX || cy < TOP - 40 || cy > H - 8 || cx < 8 || cx > W - 8) continue;          // (ash does not burn again)
+      const c = c0 + dc, r = r0 + dr, k = c + ',' + r, [cx, cy] = this.centre(c, r);
+      if (rad > 0 && (Math.abs(dc) + Math.abs(dr) > rad + 1 || (Math.abs(dc) + Math.abs(dr) > rad && Math.random() < 0.6) || (Math.max(Math.abs(dc), Math.abs(dr)) === rad && Math.random() < 0.25))) continue;          // (a blob, ragged at its edge - not a square of squares)
+      if (this.fire.has(k) || this.ash.has(k) || this.wet.has(k) || this.fire.size >= FIRE_MAX || cy < TOP - 40 || cy > H - 8 || cx < 8 || cx > W - 8) continue;          // (ash does not burn again)
       if (this.trees.some((t) => Math.abs(t.x - cx) < t.r && Math.abs(t.y - cy) < t.r / 2 + 6)) continue;          // (not inside a trunk)
-      const v = Math.floor(Math.random() * 4), gnd = this.add.image(c * TILE, r * TILE, `burnt${v}_0`).setOrigin(0).setDepth(-950);
-      const K = KINDS[kind], spr = this.add.image(c * TILE + TILE / 2, r * TILE + TILE, `flame0-${kind}`).setOrigin(0.5, 1).setDepth(r * TILE + TILE - 2);
+      const v = 0, gnd = this.add.image(cx - DW / 2 - 8, cy - DH / 2 - 4, this.tileKey('burn', c, r)).setOrigin(0).setDepth(-950 - (Math.random() < 0.5 ? 0.1 : 0));
+      // a flame on about half the squares, anywhere in its square, each its own size and its own beat - not one flame stamped on a grid
+      const fx = cx + Phaser.Math.Between(-9, 9), fy = cy + Phaser.Math.Between(-3, 5);
+      const K = KINDS[kind], spr = this.add.image(fx, fy, flameKey(0, kind, '-s')).setOrigin(0.5, 1).setDepth(fy).setVisible(Math.random() < 0.5);
+      if (Math.random() < 0.6) { const a = Math.random() * Math.PI * 2, sc = this.add.image(R(cx + Math.cos(a) * 20), R(cy + Math.sin(a) * 10), 'scorch').setDepth(-960).setAlpha(0.85).setFlipX(Math.random() < 0.5); (this.scorches || (this.scorches = [])).push(sc); }          // (soot past its edge: the burnt patch is not a sharp diamond)
       if (this.round) this.round.burnt++;
-      this.fire.set(k, { c, r, age: 0, life: FIRE_LIFE * K.life * (0.8 + Math.random() * 0.4), spr, gnd, v, kind, hits: K.hits + (kind === 'blue' && this.monsters.some((m) => m.big) ? 1 : 0), hitBy: -1, ph: Math.floor(Math.random() * 3) });
+      this.fire.set(k, { c, r, age: 0, life: FIRE_LIFE * K.life * (0.8 + Math.random() * 0.4), spr, gnd, v, kind, big: Math.random() < 0.55, fps: 6 + Math.random() * 5, hits: K.hits + (kind === 'blue' && this.monsters.some((m) => m.big) ? 1 : 0), hitBy: -1, ph: Math.floor(Math.random() * 3) });
     }
   }
-  toAsh(k, f) { f.spr.destroy(); this.fire.delete(k); f.gnd.setTexture(`ash${f.v}`); this.ash.set(k, f.gnd); }
+  toAsh(k, f) { f.spr.destroy(); this.fire.delete(k); f.gnd.setTexture(this.tileKey('ash', f.c, f.r)); this.ash.set(k, f.gnd); }
   douseGround(x, y, id) {          // one hit a swing: a blue fire takes three
     const k = this.cell(x, y).join(','), f = this.fire.get(k); if (!f || f.hitBy === id) return false;
     f.hitBy = id; if (--f.hits > 0) { f.spr.setTintFill(0xffffff); this.time.delayedCall(70, () => f.spr.active && f.spr.clearTint()); return false; }
-    this.toAsh(k, f); if (Math.random() < 0.4) this.puff(f.c * TILE + TILE / 2, f.r * TILE + 4, 1);
-    if (!this.hissT || this.time.now - this.hissT > 250) { this.hissT = this.time.now; this.sfx('hr_steam_0', 0.25); } return true;
+    this.toAsh(k, f); if (Math.random() < 0.4) { const [px, py] = this.centre(f.c, f.r); this.puff(px, py - 4, 1); }
+    if (!this.hissT || this.time.now - this.hissT > 250) { this.hissT = this.time.now; this.sfx('hr_steam_0', 0.25, x); } return true;
+  }
+  // which square a fire spreads to: any of the four beside it, those the wind blows toward up to 2.5 times as likely
+  downwind() {
+    const N = [[1, 0], [-1, 0], [0, 1], [0, -1]], wt = N.map(([c, r]) => 1 + 1.5 * Math.max(0, Math.sign(c - r) * this.wind));
+    let u = Math.random() * wt.reduce((a, b) => a + b); for (let i = 0; i < 4; i++) { u -= wt[i]; if (u <= 0) return N[i]; } return N[0];
   }
   updateFire(dt) {
     this.spreadT += dt; const spread = this.spreadT >= 0.6; if (spread) this.spreadT = 0;
@@ -424,42 +619,160 @@ class Chapter1 extends Phaser.Scene {
     for (const [k, f] of this.fire) {
       f.age += dt;
       if (f.age > f.life) { this.toAsh(k, f); continue; }
-      f.gnd.setTexture(`burnt${f.v}_${(Math.floor(f.age * 5) + f.ph) % 3}`);
-      f.spr.setTexture(`flame${(Math.floor(f.age * 8) + f.ph) % 3}-${f.kind}`).setFlipX(Math.floor(f.age * 3 + f.ph) % 2 === 0);
-      if (spread && f.age > 2 && f.age < f.life - 3 && Math.random() < lerp(0.07, 0.12, HARD(this.wave)) * KINDS[f.kind].spread) { const [dc, dr] = [[1, 0], [-1, 0], [0, 1], [0, -1]][Math.floor(Math.random() * 4)]; born.push([(f.c + dc) * TILE + TILE / 2, (f.r + dr) * TILE + TILE / 2, f.kind]); }
+      f.gnd.setTexture(this.tileKey((Math.floor(f.age * 4) + f.ph) % 3 === 0 ? 'burnB' : 'burn', f.c, f.r));          // (the embers flicker)
+      if (Math.random() < dt * 0.5) { const [sx, sy] = this.centre(f.c, f.r); this.smoke(sx, sy - 6, Math.random() < 0.35); }          // (smoke, and steam where the rain falls on it)
+      const u = f.age / f.life, sz = u < 0.1 || u > 0.88 ? '-s' : u < 0.25 || u > 0.7 || !f.big ? '-m' : '';          // (it catches small, burns up, dies down to a lick)
+      f.spr.setTexture(flameKey((Math.floor(f.age * f.fps) + f.ph) % 3, f.kind, sz)).setFlipX(Math.floor(f.age * f.fps * 0.4 + f.ph) % 2 === 0);
+      if (spread && f.age > 2 && f.age < f.life - 3 && Math.random() < lerp(0.07, 0.12, HARD(this.wave)) * KINDS[f.kind].spread) { const [dc, dr] = this.downwind(); born.push([...this.centre(f.c + dc, f.r + dr), f.kind]); }
     }
     for (const [x, y, kd] of born) this.ignite(x, y, 0, kd);
     this.updateTrees(dt, spread);
-    if (this.fireS) this.fireS.setVolume(Math.min(0.55, this.fire.size / 160 + this.trees.filter((tr) => tr.state === 'burning').length * 0.08));          // (as loud as the fire is big)
   }
 
   // TREES CATCH: a green tree with fire on the ground at its foot may catch (a chance at each spread); it burns ~10 s - flames in its
   // crown, the ground round its trunk catching - and stands burnt after (its burnt picture). Water on its crown puts it out: burnt.
   updateTrees(dt, spread) {
     for (const tr of this.trees) {
-      if (tr.state === 'green' && spread) {
-        let near = false; for (const f of this.fire.values()) if (Math.abs(f.c * TILE + 8 - tr.x) < tr.r + 18 && Math.abs(f.r * TILE + 8 - tr.y) < 22) { near = true; break; }
+      if ((tr.state === 'green' || tr.state === 'half') && spread) {
+        let near = false; for (const f of this.fire.values()) { const [fx, fy] = this.centre(f.c, f.r); if (Math.abs(fx - tr.x) < tr.r + 20 && Math.abs(fy - tr.y) < 18) { near = true; break; } }
         if (near && Math.random() < 0.18) this.lightTree(tr);
       } else if (tr.state === 'burning') {
         tr.burnT += dt;
-        tr.flames.forEach((fl, i) => fl.setTexture(`flame${(Math.floor(tr.burnT * 8) + i) % 3}-red`).setFlipX((Math.floor(tr.burnT * 3) + i) % 2 === 0));
-        if (spread && Math.random() < 0.25) this.ignite(tr.x + Phaser.Math.Between(-28, 28), tr.y + Phaser.Math.Between(-6, 10));
-        if (tr.burnT > 10) this.burnOut(tr);
+        if (tr.solid && tr.burnT >= TREE_SAVE && !tr.img.texture.key.startsWith('tree-half')) this.setProp(tr.img, `tree-half-${tr.v}`);          // (past saving: half of it gone)
+        tr.flames.forEach((fl, i) => fl.setTexture(flameKey((Math.floor(tr.burnT * 8) + i) % 3, 'red')).setFlipX((Math.floor(tr.burnT * 3) + i) % 2 === 0));
+        if (spread && Math.random() < (tr.solid ? 0.25 : 0.15)) { const s = tr.solid ? 28 : 14; this.ignite(tr.x + Phaser.Math.Between(-s, s), tr.y + Phaser.Math.Between(-6, 10)); }
+        if (tr.burnT > (tr.solid ? 10 : 7)) this.burnOut(tr);
       }
     }
   }
   lightTree(tr) {
-    tr.state = 'burning'; tr.burnT = 0; const h = tr.img.height, w = tr.img.width;
-    tr.flames = Array.from({ length: 7 }, () => this.add.image(R(tr.x + Phaser.Math.Between(-w * 0.35, w * 0.35)), R(tr.y - h * Phaser.Math.FloatBetween(0.35, 0.9)), 'flame0-red')
-      .setOrigin(0.5, 1).setScale(2).setDepth(tr.y + 1));
+    tr.was = tr.state; tr.state = 'burning'; tr.burnT = tr.was === 'half' ? TREE_SAVE : 0; const h = tr.img.height, w = tr.img.width;
+    tr.shadow.setAlpha(PIXEL.shadowAlpha * 0.35); 
+    tr.flames = Array.from({ length: tr.solid ? 9 : 3 }, () => this.add.image(R(tr.x + Phaser.Math.Between(-w * 0.35, w * 0.35)), R(tr.y - h * Phaser.Math.FloatBetween(0.35, 0.9)), 'flame-0')
+      .setOrigin(0.5, 1).setScale(1).setDepth(tr.y + 1));
   }
+  // put out (or burnt through): within TREE_SAVE seconds it is green again, a moment darker; after that it stands burnt
   burnOut(tr) {
-    for (const fl of tr.flames || []) fl.destroy(); tr.flames = null; tr.state = 'burnt'; tr.img.setTexture('tree-burnt'); this.puff(tr.x, tr.y - 50, 6);
+    for (const fl of tr.flames || []) fl.destroy(); tr.flames = null; if (tr.glowG) { tr.glowG.destroy(); tr.glowG = null; }
+    const left = tr.solid && tr.burnT < 10 ? (tr.burnT < TREE_SAVE ? 'green' : 'half') : null;          // (put out in time: green; later: half burnt; burnt through: burnt)
+    if (left === 'half') { tr.state = 'half'; tr.shadow.destroy(); tr.shadow = this.shadowOf(`tree-half-${tr.v}`, tr.x, tr.y); this.puff(tr.x, tr.y - 90, 4); this.say('반쯤 탔어요'); return; }
+    if (tr.burnT < TREE_SAVE) {
+      tr.state = tr.was === 'half' ? 'half' : 'green'; tr.shadow.setAlpha(PIXEL.shadowAlpha); tr.saveT = 1.6;          // (a moment darker: four shades back to its own colour, in updateProps)
+      this.puff(tr.x, tr.y - (tr.solid ? 90 : 30), 4); this.say(tr.solid ? '나무를 지켰다!' : '덤불을 지켰다!'); return;
+    }
+    const k = `${tr.base}-burnt-${tr.v}`; tr.state = 'burnt'; this.setProp(tr.img, k);
+    tr.shadow.destroy(); tr.shadow = this.shadowOf(k, tr.x, tr.y); /* (its shadow now the bare tree's) */ this.puff(tr.x, tr.y - (tr.solid ? 90 : 30), 6);
+  }
+
+  // THE PROPS ALIVE: the wind (each its own beat), see-through when someone is behind a big one, the fire's light on them, a saved
+  // tree's colour coming back, rain rings on the puddles
+  updateProps(dt) {
+    const t = this.time.now / 1000, all = [...this.trees, ...this.decor], who = [this.girl, ...(this.monsters || []).filter((m) => !m.dead)];
+    this.lightT -= dt; const relight = this.lightT <= 0; if (relight) this.lightT = 0.25;
+    let hot = null;
+    if (relight) {          // (where it burns: the ground on fire, the burning trees, the fire monsters)
+      hot = [...this.fire.values()].map((f) => this.centre(f.c, f.r));
+      for (const tr of this.trees) if (tr.state === 'burning') hot.push([tr.x, tr.y]);
+      for (const m of this.monsters || []) if (!m.dead) hot.push([m.x, m.y]);
+      this.hot = hot;
+      // the fire's roar: as loud as the fire NEAR her, from the side it is on
+      if (this.fireS) { let v = 0, px = 0; for (const [hx, hy] of hot) { const k = Math.max(0, 1 - wdist(hx - this.girl.x, hy - this.girl.y) / 420); v += k; px += k * (hx - this.girl.x); }
+        this.fireS.setVolume(Math.min(0.6, v * 0.035)); if (this.fireS.setPan) this.fireS.setPan(v ? Phaser.Math.Clamp(px / v / 300, -0.7, 0.7) : 0); }
+    }
+    if ((this.darkClock -= dt) <= 0) { this.darkClock = 0.08; this.drawDark(this.hot || []); }          // (the firelight moves smoothly, more often than the rest)
+    // lightning: a white flash in two steps, the shadows deep for that moment, the thunder after it (the farther, the later)
+    if ((this.boltT -= dt) <= 0) {
+      this.boltT = Phaser.Math.Between(...LIGHTNING); const far = Math.random();
+      this.flashImg.setAlpha(0.55); this.time.delayedCall(70, () => this.flashImg.setAlpha(0)); this.time.delayedCall(140, () => this.flashImg.setAlpha(0.3)); this.time.delayedCall(220, () => this.flashImg.setAlpha(0));
+      for (const tr of this.trees) { tr.shadow.setAlpha(Math.min(1, PIXEL.shadowAlpha * 2)); this.time.delayedCall(220, () => tr.shadow.active && tr.shadow.setAlpha(tr.state === 'burning' ? PIXEL.shadowAlpha * 0.35 : PIXEL.shadowAlpha)); }
+      this.time.delayedCall(300 + far * 1400, () => { this.sfx(['thunder_0', 'thunder_1'], 0.75 - far * 0.35); if (far < 0.3) this.cameras.main.shake(260, 0.004); });
+    }
+    for (const p of all) {
+      const key = p.img.texture.key.split('~')[0];
+      // the wind: leaning with it; a strong one keeps them bent
+      if (this.swayPad(key)) { const w = Math.sign(this.wind), s = (Math.abs(this.wind) > 0.8 ? [w, w, 0, w] : [0, w, 0, -w])[Math.floor(t / 1.1 + (p.ph ?? p.x * 0.07)) % 4]; if (!p.img.texture.key.endsWith(`~${s}`)) this.setProp(p.img, key, s); }
+      // behind a tall one (its crown over them): see-through, so nobody is lost behind a tree
+      if (p.solid) p.img.setAlpha(who.some((o) => o.y < p.y - 2 && o.y > p.y - p.img.height * 0.8 && Math.abs(o.x - p.x) < p.img.width * 0.42) ? 0.55 : 1);
+      if (p.saveT > 0) { p.saveT -= dt; const k = Math.floor((1 - p.saveT / 1.6) * 4) / 4; p.img.setTint(Phaser.Display.Color.GetColor(138 + 117 * k, 128 + 127 * k, 112 + 143 * k)); if (p.saveT <= 0) p.img.clearTint(); continue; }
+      if (relight) {          // the fire's light: warmer the nearer it is, in four steps
+        let d = 1e9; for (const [hx, hy] of hot) { const e = wdist(hx - p.x, hy - p.y); if (e < d) d = e; }
+        const lv = d < 45 ? 3 : d < 80 ? 2 : d < 120 ? 1 : 0; p.img.setTint([0xffffff, 0xfff0dc, 0xffe0b8, 0xffd096][lv]);
+      }
+    }
+    this.updateRipples(dt);
+  }
+
+  // RAIN ON A PUDDLE: where a drop lands on it, a ring spreads - bigger and slower for a bigger drop, now and then a second ring inside
+  // the first, fading as it goes; drawn a pixel at a time, flattened 2:1 as the ground is seen, and only on the water (never past its edge)
+  ripple(x, y, size) {
+    const q = this.puddles.find((p) => this.onPuddle(p, x, y)); if (!q) return false;
+    const max = [3, 5, 8][size], life = [0.35, 0.5, 0.7][size];
+    this.ripples.push({ x: R(x), y: R(y), t: 0, max, life, q, two: size > 0 && Math.random() < 0.4 }); return true;
+  }
+  onPuddle(p, x, y) {          // is this point on the puddle's water (its picture's own pixels)?
+    if (p.gone || !p.spr.active) return false;
+    const key = p.spr.texture.key, m = this.pmask[key] || (this.pmask[key] = (() => { const img = this.textures.get(key).getSourceImage(), cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height; const c = cv.getContext('2d'); c.drawImage(img, 0, 0); return { w: img.width, h: img.height, a: c.getImageData(0, 0, img.width, img.height).data }; })());
+    let px = Math.floor(x - (p.x - m.w / 2)); const py = Math.floor(y - (p.y - m.h / 2)); if (p.spr.flipX) px = m.w - 1 - px;
+    return px >= 1 && py >= 1 && px < m.w - 1 && py < m.h - 1 && m.a[(py * m.w + px) * 4 + 3] > 100 && p.spr.alpha > 0.5;
+  }
+  updateRipples(dt) {
+    const g = this.rippleG; g.clear();
+    for (const q of this.puddles) if (q.stage < 2 && Math.random() < dt * 6) {          // (drops the rain streaks do not show: more rings)
+      const w = q.spr.width / 2, h = q.spr.height / 2; this.ripple(q.x + (Math.random() * 2 - 1) * w, q.y + (Math.random() * 2 - 1) * h, Phaser.Math.Between(0, 2));
+    }
+    for (const r of this.ripples) {
+      r.t += dt; const u = r.t / r.life, fade = 1 - u;
+      const ring = (rad, al) => {
+        if (rad < 1) { g.fillStyle(0xe4f2ff, al); g.fillRect(r.x, r.y, 1, 1); return; }
+        const seen = new Set(), n = Math.max(8, Math.ceil(rad * 7));
+        g.fillStyle(0xe4f2ff, al);
+        for (let i = 0; i < n; i++) {
+          const a = i / n * Math.PI * 2, X = r.x + Math.round(Math.cos(a) * rad), Y = r.y + Math.round(Math.sin(a) * rad * 0.5), k = X * 4096 + Y;
+          if (seen.has(k) || !this.onPuddle(r.q, X, Y)) continue; seen.add(k); g.fillRect(X, Y, 1, 1);
+        }
+      };
+      ring(Math.floor(r.max * Math.min(1, u * 1.15)), 0.75 * fade);          // (grows by whole pixels)
+      if (r.two && u > 0.35) ring(Math.floor(r.max * (u - 0.35) * 1.3), 0.55 * fade);
+    }
+    this.ripples = this.ripples.filter((r) => r.t < r.life);
+  }
+
+  // THE DARK, and the firelight in it: each fire lights round it the way a flame does - brightest at it and fading smoothly away
+  // (falls off with distance; no edge), a little warm colour on what it lights, flickering by a slow waver of its own, not a jump.
+  // Many small fires together light more. Drawn at a quarter size and scaled up whole (light in 4-pixel steps).
+  drawDark(hot) {
+    const c = this.darkT.getContext(), wc = this.warmT.getContext(), w = W / 4, h = H / 4, t = this.time.now / 1000;
+    const burnt = this.round ? Math.min(1, this.fire.size / 120) : 0, a = DARK + DARK_SMOKE * burnt;
+    c.globalCompositeOperation = 'source-over'; c.clearRect(0, 0, w, h); wc.clearRect(0, 0, w, h);
+    c.fillStyle = `rgba(${R(lerp(14, 40, burnt))},${R(lerp(22, 32, burnt))},${R(lerp(44, 30, burnt))},${a})`; c.fillRect(0, 0, w, h);          // (blue-grey rain; browner with smoke)
+    c.globalCompositeOperation = 'destination-out'; wc.globalCompositeOperation = 'lighter';
+    const lit = (x, y, r, k, warm, seed, sy = 0.55) => {
+      const f = 0.9 + 0.07 * Math.sin(t * 9.1 + seed) + 0.05 * Math.sin(t * 15.7 + seed * 2.3);          // (a flame's waver)
+      const X = x / 4, Y = y / 4, rr = r * f / 4;
+      c.save(); c.translate(X, Y); c.scale(1, sy);          // (on the ground: flattened as the ground is seen; in the air, round)
+      const g = c.createRadialGradient(0, 0, 0, 0, 0, rr); g.addColorStop(0, `rgba(0,0,0,${k * f})`); g.addColorStop(0.35, `rgba(0,0,0,${k * f * 0.55})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+      c.fillStyle = g; c.fillRect(-rr, -rr, rr * 2, rr * 2); c.restore();
+      if (!warm) return;
+      wc.save(); wc.translate(X, Y); wc.scale(1, sy);
+      const q = wc.createRadialGradient(0, 0, 0, 0, 0, rr * 0.8); q.addColorStop(0, `rgba(${warm},${0.16 * f})`); q.addColorStop(0.4, `rgba(${warm},${0.07 * f})`); q.addColorStop(1, `rgba(${warm},0)`);
+      wc.fillStyle = q; wc.fillRect(-rr, -rr, rr * 2, rr * 2); wc.restore();
+    };
+    const GLOW = { red: '255,120,40', green: '120,220,60', purple: '200,90,255', blue: '70,150,255' };
+    for (const f of this.fire.values()) { const [x, y] = this.centre(f.c, f.r); lit(x, y, 46, 0.22, GLOW[f.kind], f.c * 3.1 + f.r * 1.7); }
+    for (const tr of this.trees) if (tr.state === 'burning') {
+      lit(tr.x, tr.y - 10, tr.solid ? 170 : 80, 0.6, GLOW.red, tr.x);          // (on the ground round it)
+      (tr.flames || []).forEach((fl, i) => lit(fl.x, fl.y - 8, 60, 0.5, GLOW.red, tr.x + i * 1.7, 0.9));          // (and each flame in its crown, lighting the leaves round it)
+    }
+    for (const m of this.monsters || []) if (!m.dead) lit(m.x, m.y - 6, m.big ? 120 : 90, 0.5, GLOW[m.kind], m.wobble);
+    for (const s of this.shots) if (!s.dead) lit(s.x, s.y, 40, 0.4, GLOW[s.kind], s.x);
+    lit(this.girl.x, this.girl.y - 20, 56, 0.3, null, 0);          // (her yellow coat: never lost in the dark)
+    this.darkT.refresh(); this.warmT.refresh();
   }
 
   keepOut(o, r) {
     o.x = Phaser.Math.Clamp(o.x, 30, W - 30); o.y = Phaser.Math.Clamp(o.y, TOP, H - 12);
-    for (const t of this.trees) {
+    for (const t of [...this.trees, ...this.rocks]) {
+      if (!t.solid) continue;
       const ddx = o.x - t.x, ddy = (o.y - t.y) * 2, d = Math.hypot(ddx, ddy), m = t.r + r;
       if (d < m && d > 0.01) { o.x = t.x + ddx / d * m; o.y = t.y + ddy / d * m / 2; }
     }
@@ -468,28 +781,28 @@ class Chapter1 extends Phaser.Scene {
   // the water: a fan in front of her, from the 3rd to the 6th frame of the swing; one hit per monster per swing
   waterHits(a) {
     const g = this.girl, [fx, fy] = vecOf(a.facing), cy = g.y - 20;
-    const inFan = (x, y) => {
-      const dx = x - g.x, dy = (y - cy), d = Math.hypot(dx, dy);
+    const inFan = (x, y) => {          // (in world terms: a pixel up or down counts twice)
+      const dx = x - g.x, dy = (y - cy) * 2, d = Math.hypot(dx, dy);
       if (d > REACH + 24) return false;
       return d < 26 || Math.acos(Phaser.Math.Clamp((dx * fx + dy * fy) / d, -1, 1)) < HALF_ANGLE;
     };
     for (const m of this.monsters) {
       if (m.dead || m.hitBy === a.id) continue;
-      if (inFan(m.x, m.y - 28)) { m.hitBy = a.id; this.douse(m, fx, fy); }
+      if (inFan(m.x, m.y - 28) || inFan(m.x, m.y - 6)) { m.hitBy = a.id; this.douse(m, fx, fy / 2); }
     }
     for (const s of this.shots) if (!s.dead && inFan(s.x, s.y)) { s.dead = true; this.puff(s.x, s.y, 3); s.obj.destroy(); }
-    for (const tr of this.trees) if (tr.state === 'burning' && Math.hypot(tr.x - g.x, tr.y - g.y) < REACH + 30 && (inFan(tr.x, tr.y - 10) || inFan(tr.x, tr.y - 40))) this.burnOut(tr);
-    for (const f of [...this.fire.values()]) { const x = f.c * TILE + TILE / 2, y = f.r * TILE + TILE / 2; if (Math.hypot(x - g.x, y - g.y) < REACH && inFan(x, y + 14)) this.douseGround(x, y, a.id); }
+    for (const tr of this.trees) if (tr.state === 'burning' && wdist(tr.x - g.x, tr.y - g.y) < REACH + 40 && (inFan(tr.x, tr.y - 10) || inFan(tr.x, tr.y - (tr.solid ? 40 : 20)))) this.burnOut(tr);
+    for (const f of [...this.fire.values()]) { const [x, y] = this.centre(f.c, f.r); if (wdist(x - g.x, y - g.y) < REACH && inFan(x, y + 14)) this.douseGround(x, y, a.id); }
   }
 
   // hit: a white flash for a moment hides the change of face, and the body squashes by whole pixels; it springs back
   douse(m, fx, fy) {
-    this.sfx('hr_steam_0', 0.35); this.sfx(['hit_soft_0', 'hit_soft_1'], 0.5);
+    this.sfx('hr_steam_0', 0.35, m.x); this.sfx(['hit_soft_0', 'hit_soft_1'], 0.5, m.x);
     m.hp--; m.hurtT = 0.35; m.kb = [fx * 300 * m.K.kb, fy * 300 * m.K.kb]; m.flashT = 0.09; m.pulse = 0.28;
     this.puff(m.x, m.y - 32, 6); this.drops(m.x, m.y - 32);
     if (m.hp <= 0) {
       // beaten: steam bursts over the change to the dizzy face, it shakes a moment, then sinks away in steps
-      m.dead = true; m.face = 'dead'; m.over.setVisible(false); this.sfx('poof_0', 0.7);
+      m.dead = true; m.face = 'dead'; m.over.setVisible(false); this.sfx('poof_0', 0.7, m.x);
       this.puff(m.x, m.y - 32, 12);
       this.monsters = this.monsters.filter(o => o !== m);
       if (this.round) this.round.kills++;
@@ -501,13 +814,24 @@ class Chapter1 extends Phaser.Scene {
       this.tweens.add({ targets: m.glow, alpha: 0, duration: 500, ease: 'Stepped', easeParams: [3] });
       this.tweens.add({ targets: m.spr, delay: 560, scaleY: 0.25, alpha: 0, duration: 380, ease: 'Stepped', easeParams: [4],
                         onStart: () => this.puff(m.x, m.y - 14, 6), onComplete: () => this.dropMonster(m) });
-      this.tweens.add({ targets: m.shadow, delay: 560, alpha: 0, duration: 380, ease: 'Stepped', easeParams: [3] });
+      this.tweens.add({ targets: [m.shadow, ...m.light], delay: 560, alpha: 0, duration: 380, ease: 'Stepped', easeParams: [3] });
     } else {
       m.face = 'hurt'; m.faceT = 0.38; this.sfx(['hurt_cute_0', 'hurt_cute_1'], 0.45);
     }
   }
 
-  dropMonster(m) { for (const o of [m.spr, m.over, m.glow, m.shadow, m.crown]) if (o) o.destroy(); }
+  dropMonster(m) { for (const o of [m.spr, m.over, m.glow, m.shadow, m.crown, ...(m.light || [])]) if (o) o.destroy(); }
+
+  // SMOKE drifting off with the wind (or white steam: the rain on the fire), and now and then a spark going up
+  smoke(x, y, steam) {
+    const c = this.add.image(R(x + Phaser.Math.Between(-6, 6)), R(y), steam ? 'steam' : Math.random() < 0.5 ? 'smoke' : 'smoke-big').setAlpha(steam ? 0.45 : 0.55).setDepth(4400);
+    const up = Phaser.Math.Between(40, 90);
+    this.tweens.add({ targets: c, y: c.y - up, x: c.x + this.wind * up * 1.1, alpha: 0, scale: steam ? 1.5 : 2, duration: Phaser.Math.Between(1300, 2200), ease: 'Stepped', easeParams: [6], onComplete: () => c.destroy() });
+    if (Math.random() < 0.3) {
+      const e = this.add.rectangle(R(x), R(y), 1, 1, Math.random() < 0.5 ? 0xffd25a : 0xff8a2e).setDepth(4600);
+      this.tweens.add({ targets: e, y: e.y - Phaser.Math.Between(30, 60), x: e.x + this.wind * 40 + Phaser.Math.Between(-8, 8), alpha: 0, duration: 900, ease: 'Stepped', easeParams: [8], onComplete: () => e.destroy() });
+    }
+  }
 
   // steam: hard pixel puffs that grow by whole steps (1x, 2x) and go, never a soft circle
   puff(x, y, n) {
@@ -530,7 +854,7 @@ class Chapter1 extends Phaser.Scene {
     const g = this.girl;
     for (const m of this.monsters) {
       m.hurtT = Math.max(0, m.hurtT - dt); m.wobble += dt;
-      const dx = g.x - m.x, dy = g.y - m.y, d = Math.hypot(dx, dy) || 1;
+      const dx = g.x - m.x, dy = g.y - m.y, d = wdist(dx, dy) || 1;          // (world terms: they come at her along the ground)
       // it hops: moves only while in the air, squashes when it lands
       const P = m.K.hop * (m.big ? 1.2 : 1); m.hopT += dt * (m.hurtT > 0 ? 0.4 : 1);
       const ph = (m.hopT % P) / P, air = ph < 0.62;
@@ -547,7 +871,7 @@ class Chapter1 extends Phaser.Scene {
       m.shootT -= dt * 1000;
       if (m.shootT <= 0) { const u = lerp(1.45, 0.95, HARD(this.wave)); m.shootT = Phaser.Math.Between(m.K.shoot[0] * u, m.K.shoot[1] * u); if (d < 420) this.shoot(m); }          // (slower in the first rounds)
       // touching her
-      if (d < 36 && g.hurtT <= 0) this.hurt(dx / d, dy / d);
+      if (d < 40 && g.hurtT <= 0) this.hurt(dx / d, dy / d);
       // the face: hurt for a moment, then back to angry - the old face shown on every other frame for a moment (pixel art has no half-see-through)
       if (m.face === 'hurt' && (m.faceT -= dt) <= 0) { m.face = 'normal'; m.fadeT = 0.14; }
       m.fadeT = Math.max(0, m.fadeT - dt); m.flashT = Math.max(0, m.flashT - dt);
@@ -562,15 +886,16 @@ class Chapter1 extends Phaser.Scene {
       if (m.flashT > 0) m.spr.setTintFill(0xffffff); else m.spr.clearTint();
       // the glow flickers by steps
       const fl = [1, 1, 0.9, 1.1][Math.floor(m.wobble * 12) % 4];
-      m.glow.setPosition(X, R(Y - th * 0.42)).setScale(fl * (m.big ? 1.2 : 1)).setDepth(m.y - 0.5);
+      m.glow.setPosition(X, R(Y - th * 0.42)).setScale(m.big ? 1.2 : 1).setDepth(m.y - 0.5);
       if (m.crown) m.crown.setPosition(X + (m.flip ? 2 : -2), R(Y - th * sy * 0.62)).setDepth(m.y + 1);          // (sat on the top of the flame)
       m.shadow.setPosition(X, R(m.y - 2)).setDepth(m.y - 1).setScale(m.hop > 12 ? 0.75 : 1);
+      for (const l of m.light) l.setPosition(X, R(m.y - 4)).setAlpha(fl > 1 ? 1 : 0.85);
     }
   }
 
   shoot(m) {
     const g = this.girl, sx = m.x, sy = m.y - (m.hop || 0) - 36;
-    const dx = g.x - sx, dy = (g.y - 34) - sy, d = Math.hypot(dx, dy) || 1, v = 170, n = m.K.shots; this.sfx('shot_fire_0', 0.3);
+    const dx = g.x - sx, dy = (g.y - 34) - sy, d = Math.hypot(dx, dy) || 1, v = 170, n = m.K.shots; this.sfx('shot_fire_0', 0.3, sx);
     for (let i = 0; i < n; i++) {
       const a = Math.atan2(dy, dx) + (i - (n - 1) / 2) * 0.32;          // (three: a fan)
       const obj = this.add.image(R(sx), R(sy), 'fireball' + m.sfx).setScale(2).setDepth(3000);
@@ -586,7 +911,7 @@ class Chapter1 extends Phaser.Scene {
       s.obj.setPosition(R(s.x), R(s.y)).setFlip(Math.floor(s.life * 16) % 2 === 0, Math.floor(s.life * 12) % 2 === 0);          // (it flickers by flipping, not by growing)
       if (Math.random() < 0.5) { const e = this.add.rectangle(R(s.x), R(s.y), 2, 2, 0xffb22e).setDepth(2999); this.tweens.add({ targets: e, alpha: 0, duration: 300, ease: 'Stepped', easeParams: [3], onComplete: () => e.destroy() }); }
       if (Phaser.Math.Distance.Between(s.x, s.y, g.x, g.y - 34) < 22 && g.hurtT <= 0) { s.dead = true; s.obj.destroy(); this.hurt(s.vx / 170, s.vy / 170); }
-      else if (s.life <= 0 || this.landed(s)) { s.dead = true; this.ignite(s.x, s.y, 1, s.kind); this.tweens.add({ targets: s.obj, alpha: 0, duration: 200, ease: 'Stepped', easeParams: [2], onComplete: () => s.obj.destroy() }); }
+      else if (s.life <= 0 || this.landed(s)) { s.dead = true; if (this.wetAt(s.x, s.y + 10)) { this.puff(s.x, s.y, 3); this.sfx('hr_steam_0', 0.3, s.x); } else this.ignite(s.x, s.y, 1, s.kind);          /* (into a puddle: it dies) */ this.tweens.add({ targets: s.obj, alpha: 0, duration: 200, ease: 'Stepped', easeParams: [2], onComplete: () => s.obj.destroy() }); }
     }
     this.shots = this.shots.filter(s => !s.dead);
   }
@@ -604,6 +929,16 @@ class Chapter1 extends Phaser.Scene {
     }
   }
 
+  // A FOOTSTEP (the walk's 2nd and 6th frames): its sound by the ground under her, and water kicked up - a splash in a puddle
+  footstep() {
+    const g = this.girl, wet = this.wetAt(g.x, g.y), path = Math.abs(g.y - PATH_Y(g.x)) * 1.414 < PATH_HALF;
+    this.sfx(wet ? ['step_puddle_0', 'step_puddle_1'] : [0, 1, 2, 3, 4].map((i) => `step_${path ? 'dirt' : 'grass'}_${i}`), wet ? 0.35 : path ? 0.16 : 0.22, g.x);
+    for (let i = 0; i < (wet ? 6 : 2); i++) {
+      const e = this.add.rectangle(R(g.x + Phaser.Math.Between(-6, 6)), R(g.y - 1), 1, 1, wet ? 0xd6ecff : 0xa8c4d8).setDepth(g.y + 2).setAlpha(0.8);
+      this.tweens.add({ targets: e, y: e.y - Phaser.Math.Between(wet ? 5 : 2, wet ? 11 : 4), x: e.x + Phaser.Math.Between(-5, 5), alpha: 0, duration: wet ? 300 : 180, ease: 'Stepped', easeParams: [3], onComplete: () => e.destroy() });
+    }
+  }
+
   drawGirl() {
     const g = this.girl, spr = this.girlSpr, X = R(g.x), Y = R(g.y);
     const left = X - PX.ax, top = Y - PX.ay; let anim, fr;
@@ -614,9 +949,10 @@ class Chapter1 extends Phaser.Scene {
     } else {
       this.trailSpr.setVisible(false);
       if (g.hurtT > 0.85) { anim = `stand-${g.show}`; fr = 0; }          // (just hit: a wince - drawn below with the hurt face)
-      else if (g.moving) { anim = `carry-${g.show}`; fr = Math.floor(g.walkT * GIRL.walk.fps) % GIRL.walk.frames; g.standT = 0; }
+      else if (g.moving) { anim = `carry-${g.show}`; fr = Math.floor(g.walkT * GIRL.walk.fps) % GIRL.walk.frames; g.standT = 0; if (fr !== this.stepFr && (fr === 1 || fr === 5)) this.footstep(); }
       else { anim = `stand-${g.show}`; g.standT = (g.standT || 0) + this.game.loop.delta / 1000; fr = Math.floor(g.standT * GIRL.stand.fps * GIRL.stand.frames / 1) % GIRL.stand.frames; }          // (standing still: SpriteCast's idle, a breath and a sway)
     }
+    this.stepFr = g.moving && !g.attack ? fr : -1;
     const wince = !g.attack && g.hurtT > 0.85;
     if (wince) spr.setTexture(`hurt-${g.show}`); else spr.setTexture(anim, fr);
     spr.setPosition(left, top).setDepth(g.y);
@@ -626,13 +962,19 @@ class Chapter1 extends Phaser.Scene {
 
   // the rain: one-pixel streaks, slanting two pixels across for every five down
   drawRain(dt) {
-    const r = this.rainG; r.clear(); r.fillStyle(0xcfe4ff, 0.5);
+    const r = this.rainG, sl = 0.15 + 0.35 * (this.wind || 0); r.clear(); r.fillStyle(0xcfe4ff, 0.5);          // (slanting with the wind)
     for (let i = 0; i < this.rain.length; i++) {
-      const d = this.rain[i]; d.y += d.v * dt; d.x -= d.v * 0.4 * dt;
-      if (d.y > H + 15) this.rain[i] = this.newDrop(false);
+      const d = this.rain[i]; d.y += d.v * dt; d.x += d.v * sl * dt;
+      if (d.y >= d.gy) { if (!this.ripple(d.x, d.gy, d.l < 8 ? 0 : d.l < 10 ? 1 : 2)) this.splashes.push({ x: R(d.x), y: R(d.gy), t: 0 }); this.rain[i] = this.newDrop(false); continue; }          // (on a puddle: a ring by the drop's size)
       const x0 = R(d.x), y0 = R(d.y);
-      for (let j = 0; j < d.l; j++) r.fillRect(x0 + Math.floor(j * 0.4), y0 - j, 1, 1);
+      for (let j = 0; j < d.l; j++) r.fillRect(x0 - Math.floor(j * sl), y0 - j, 1, 1);
     }
+    // where a drop lands on the ground: a crown of two pixels, then two wider (on a puddle: a ring, updateRipples)
+    for (const p of this.splashes) {
+      p.t += dt; const k = p.t < 0.06 ? 0 : 1;
+      { r.fillStyle(0xcfe4ff, 0.45); if (k) { r.fillRect(p.x - 2, p.y - 1, 1, 1); r.fillRect(p.x + 2, p.y - 1, 1, 1); } else { r.fillRect(p.x - 1, p.y - 1, 1, 1); r.fillRect(p.x + 1, p.y - 1, 1, 1); } }
+    }
+    this.splashes = this.splashes.filter((p) => p.t < 0.13);
   }
 
   drawUi() {

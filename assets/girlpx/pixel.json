@@ -1,0 +1,282 @@
+{
+ "asked_px": 96,
+ "scale": 1.08,
+ "figure_px": 96,
+ "frame": [
+  121,
+  127
+ ],
+ "colours": 43,
+ "animations": {
+  "carry-south-east": 8,
+  "carry-south-west": 8,
+  "carry-north-east": 8,
+  "carry-north-west": 8,
+  "slash-south-east": 8,
+  "slash-south-west": 8,
+  "slash-north-east": 8,
+  "slash-north-west": 8
+ },
+ "origin": [
+  107,
+  99
+ ],
+ "release": {},
+ "shadows": {
+  "carry-south-east": {
+   "file": "shadows/carry-south-east.png",
+   "frame": [
+    81,
+    59
+   ],
+   "offset": [
+    5,
+    68
+   ]
+  },
+  "carry-south-west": {
+   "file": "shadows/carry-south-west.png",
+   "frame": [
+    98,
+    57
+   ],
+   "offset": [
+    -17,
+    70
+   ]
+  },
+  "carry-north-east": {
+   "file": "shadows/carry-north-east.png",
+   "frame": [
+    83,
+    63
+   ],
+   "offset": [
+    3,
+    60
+   ]
+  },
+  "carry-north-west": {
+   "file": "shadows/carry-north-west.png",
+   "frame": [
+    93,
+    63
+   ],
+   "offset": [
+    -17,
+    62
+   ]
+  },
+  "slash-south-east": {
+   "file": "shadows/slash-south-east.png",
+   "frame": [
+    95,
+    72
+   ],
+   "offset": [
+    0,
+    54
+   ]
+  },
+  "slash-south-west": {
+   "file": "shadows/slash-south-west.png",
+   "frame": [
+    100,
+    56
+   ],
+   "offset": [
+    -31,
+    71
+   ]
+  },
+  "slash-north-east": {
+   "file": "shadows/slash-north-east.png",
+   "frame": [
+    122,
+    68
+   ],
+   "offset": [
+    -25,
+    57
+   ]
+  },
+  "slash-north-west": {
+   "file": "shadows/slash-north-west.png",
+   "frame": [
+    98,
+    67
+   ],
+   "offset": [
+    -19,
+    51
+   ]
+  }
+ },
+ "trails": {
+  "slash-south-east": {
+   "file": "trails/slash-south-east.png",
+   "frame": [
+    111,
+    169
+   ],
+   "offset": [
+    52,
+    2
+   ],
+   "frames": 24,
+   "per_frame": 3
+  },
+  "slash-south-west": {
+   "file": "trails/slash-south-west.png",
+   "frame": [
+    102,
+    157
+   ],
+   "offset": [
+    -43,
+    -2
+   ],
+   "frames": 24,
+   "per_frame": 3
+  },
+  "slash-north-east": {
+   "file": "trails/slash-north-east.png",
+   "frame": [
+    102,
+    148
+   ],
+   "offset": [
+    61,
+    -35
+   ],
+   "frames": 24,
+   "per_frame": 3
+  },
+  "slash-north-west": {
+   "file": "trails/slash-north-west.png",
+   "frame": [
+    111,
+    140
+   ],
+   "offset": [
+    -43,
+    -35
+   ],
+   "frames": 24,
+   "per_frame": 3
+  }
+ },
+ "shadow_colour": [
+  40,
+  30,
+  24
+ ],
+ "shadow_alpha": 0.3,
+ "review": {
+  "carry-north-west": {
+   "6": [
+    "pose 0.69"
+   ],
+   "7": [
+    "pose 0.71"
+   ]
+  },
+  "carry-south-east": {
+   "6": [
+    "pose 0.74"
+   ]
+  },
+  "slash-south-west": {
+   "6": [
+    "pose 0.73"
+   ],
+   "7": [
+    "pose 0.73"
+   ]
+  }
+ },
+ "made": {
+  "carry-south-east": {
+   "frames": 8,
+   "sheets": 3,
+   "draw_s": 95.6,
+   "cut_s": 28.7,
+   "hand_frames": 8,
+   "hand_px": 394,
+   "hand_s": 1433,
+   "px": 18435
+  },
+  "carry-south-west": {
+   "frames": 8,
+   "sheets": 3,
+   "draw_s": 99.8,
+   "cut_s": 26.1,
+   "hand_frames": 1,
+   "hand_px": 2,
+   "hand_s": 10,
+   "px": 18096,
+   "estimated": true
+  },
+  "carry-north-east": {
+   "frames": 8,
+   "sheets": 3,
+   "draw_s": 102.8,
+   "cut_s": 25.5,
+   "hand_frames": 1,
+   "hand_px": 2,
+   "hand_s": 2,
+   "px": 17462
+  },
+  "carry-north-west": {
+   "frames": 8,
+   "sheets": 3,
+   "draw_s": 107.8,
+   "cut_s": 25.1,
+   "hand_frames": 4,
+   "hand_px": 16,
+   "hand_s": 16,
+   "px": 17464
+  },
+  "slash-south-east": {
+   "frames": 8,
+   "sheets": 4,
+   "draw_s": 133.2,
+   "cut_s": 24.5,
+   "hand_frames": 7,
+   "hand_px": 104,
+   "hand_s": 169,
+   "px": 17543,
+   "estimated": true
+  },
+  "slash-south-west": {
+   "frames": 8,
+   "sheets": 4,
+   "draw_s": 129.6,
+   "cut_s": 27.8,
+   "hand_frames": 6,
+   "hand_px": 23,
+   "hand_s": 61,
+   "px": 15007
+  },
+  "slash-north-east": {
+   "frames": 8,
+   "sheets": 4,
+   "draw_s": 133.6,
+   "cut_s": 24.7,
+   "hand_frames": 8,
+   "hand_px": 180,
+   "hand_s": 170,
+   "px": 17498
+  },
+  "slash-north-west": {
+   "frames": 8,
+   "sheets": 4,
+   "draw_s": 138.1,
+   "cut_s": 25.1,
+   "hand_frames": 6,
+   "hand_px": 113,
+   "hand_s": 99,
+   "px": 18330
+  }
+ }
+}

@@ -2,21 +2,39 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Rain Girl - Chapter 1</title>
 <style>
   @font-face { font-family: 'Galmuri11'; src: url('assets/font/Galmuri11.woff2') format('woff2'); }
-  html, body { margin: 0; height: 100%; background: #1d2318; }
+  html, body { margin: 0; height: 100%; background: #1d2318; overflow: hidden; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
   body { display: flex; align-items: center; justify-content: center; }
-  canvas { image-rendering: pixelated; image-rendering: crisp-edges; }
-  #namebox { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: #0008; font-family: 'Galmuri11', sans-serif; }
+  /* the picture is fitted to the window here (game.js `fit`): whole, in the middle - and on a phone held upright, turned a quarter
+     so that it fills the screen: hold the phone sideways and play, whether or not the phone turns its own screen */
+  canvas { image-rendering: pixelated; image-rendering: crisp-edges; position: fixed; left: 50%; top: 50%; width: var(--gw, 960px) !important; height: var(--gh, 540px) !important; margin: 0 !important; transform: translate(-50%, -50%) rotate(var(--turn, 0deg)); }
+  .turned #namebox form, .turned #boot { transform: rotate(90deg); }
+  .turned #boot { top: 50%; bottom: auto; left: 50%; right: auto; width: 90vh; padding: 0; transform: translate(-50%, -50%) rotate(90deg) translateY(calc(50vw - 20px)); }
+  #namebox { position: fixed; inset: 0; top: 0; left: 0; right: 0; bottom: 0; z-index: 30; display: none; align-items: center; justify-content: center; background: #0008; font-family: 'Galmuri11', sans-serif; }
   #namebox form { background: #2b2418; border: 4px solid #fff3d6; padding: 18px 22px; color: #fff3d6; text-align: center; image-rendering: pixelated; }
   #namebox input { font: 22px 'Galmuri11', sans-serif; width: 12ch; margin: 10px 0; padding: 4px 8px; background: #fff3d6; color: #2b2418; border: 0; text-align: center; }
   #namebox button { font: 16px 'Galmuri11', sans-serif; background: #f2c21b; color: #2b2418; border: 0; padding: 6px 14px; cursor: pointer; }
   #namebox #gh, #namebox #asme { background: #fff3d6; }
+  #namebox input { -webkit-user-select: text; user-select: text; }
+  /* until the title is up: what is loading, and an error in words (so a black screen says why) */
+  #boot { position: fixed; left: 0; right: 0; bottom: 12px; text-align: center; color: #b9c2a8; font: 14px sans-serif; z-index: 20; pointer-events: none; padding: 0 12px; }
 </style>
 </head>
 <body>
+<div id="boot">Loading the page...</div>
+<script>
+  // BOOT: the words under the picture while it loads; an error shown in words, whenever it comes
+  var BOOT = { lost: [], el: document.getElementById('boot'), started: false,
+    up: function () { this.started = true; this.el.textContent = this.lost.length ? 'Not loaded: ' + this.lost.slice(0, 4).join(', ') + (this.lost.length > 4 ? ' +' + (this.lost.length - 4) : '') : ''; var el = this.el; if (this.lost.length) setTimeout(function () { el.textContent = ''; }, 6000); },
+    // (a phone's sound refusing to start for a moment - a call, the keyboard coming up - is not the game's error, and the sound comes
+    // back by itself: not shown. Once the game is up, an error is shown for a few seconds and goes)
+    say: function (m) { if (/audio|AudioContext|NotAllowedError|play\(\)/i.test(m)) return; var el = this.el; el.style.color = '#ffb0a0'; el.textContent = m; if (this.started) { clearTimeout(this.t); this.t = setTimeout(function () { el.textContent = ''; }, 6000); } } };
+  window.addEventListener('error', function (e) { if (e.message) BOOT.say('Error: ' + e.message + ' (' + String(e.filename || '').split('/').pop().split('?')[0] + ':' + e.lineno + ')'); else if (e.target && e.target.src) BOOT.say('Could not load ' + String(e.target.src).split('/').pop()); }, true);
+  window.addEventListener('unhandledrejection', function (e) { BOOT.say('Error: ' + (e.reason && e.reason.message || e.reason)); });
+</script>
 <div id="namebox"><form>
   <div id="nb-score"></div>
   <div id="nb-gh" style="margin:10px 0"><button type="button" id="gh">Sign in with GitHub to post</button></div>
@@ -24,9 +42,11 @@
   <div id="nb-guest" style="opacity:.8;margin-top:6px">or as a guest</div><input maxlength="12" autocomplete="off"><br><button>Post</button> <button type="button" id="skip">Skip</button>
   <div id="nb-msg" style="margin-top:8px;color:#ffb0a0;min-height:1em"></div></form></div>
 <script src="phaser.min.js"></script>
+<script>BOOT.el.textContent = window.Phaser ? 'Engine ready...' : 'The engine did not load (phaser.min.js)';</script>
 <script src="assets/girlpx/pixel.js?v=6"></script>
 <script src="assets/px/props/foot.js"></script>
 <script src="assets/px/props/hit.js"></script>
+<script src="assets/px/props/clumps.js"></script>
 <script src="i18n.js"></script>
 <script src="ranking-config.js"></script>
 <script src="ranking.js"></script>

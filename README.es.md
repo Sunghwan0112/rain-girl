@@ -18,6 +18,7 @@ Un pequeño juego de acción en pixel art que se juega en el navegador: sin inst
 | **Agitar el paraguas (lanzar agua)** | Space / J |
 | **Cambiar el idioma** | L, en la pantalla de título |
 | **Jugar otra vez** | R |
+| **En móvil o tableta** | pulgar izquierdo: mover · pulgar derecho: agitar el paraguas · toca para empezar (el juego pasa al modo táctil solo) |
 
 Los monstruos de fuego saltan por el bosque. Donde caen, la hierba prende; el fuego se extiende, el suelo en llamas te corta el paso y los árboles arden. Apaga a los monstruos, y los fuegos que dejan, antes de que se queme el bosque.
 

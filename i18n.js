@@ -4,6 +4,7 @@ const LANGS = ['en', 'ko', 'ja', 'zh', 'es', 'pt'];
 const LANG_NAME = { en: 'English', ko: '한국어', ja: '日本語', zh: '简体中文', es: 'Español', pt: 'Português' };
 const WORDS = {
   en: {
+    startT: 'Tap to start', helpT: 'Left thumb: move      Right thumb: spray      Water puts the fire out', tapAgain: 'Tap to play again', langT: '{name} ▸', rotate: 'Turn your phone sideways',
     page: 'Rain Girl - Chapter 1', title: 'Rain Girl', chapter: 'Chapter 1 · The Burning Forest', start: 'Press Space to start',
     help: 'Move: arrows / WASD      Spray: Space / J      Water puts the fire out', lang: 'L: language',
     rankFail: 'Not on the board: {why}', clear: 'CLEAR', boardMonth: '— {month} —', boardLocal: '— this computer —', noScores: 'No scores yet',
@@ -17,6 +18,7 @@ const WORDS = {
     wave: 'Fire monsters {m}  ·  Round {n} / {of}',
   },
   ko: {
+    startT: '화면을 눌러 시작', helpT: '왼손 엄지: 이동      오른손 엄지: 물뿌리기      불길은 물로 꺼요', tapAgain: '화면을 눌러 다시 하기', langT: '{name} ▸', rotate: '폰을 가로로 돌려 주세요',
     page: '우비소녀의 여행 - 1장', title: '우비소녀의 여행', chapter: '1장 · 불꽃 숲', start: 'Space 를 눌러 시작',
     help: '이동: 방향키 / WASD      물뿌리기: Space / J      불길은 물로 꺼요', lang: 'L: 언어',
     rankFail: '랭킹에 못 올렸어요: {why}', clear: '클리어', boardMonth: '— {month}의 랭킹 —', boardLocal: '— 이 컴퓨터의 랭킹 —', noScores: '아직 기록이 없어요',
@@ -30,6 +32,7 @@ const WORDS = {
     wave: '불꽃 몬스터 {m}  ·  라운드 {n} / {of}',
   },
   ja: {
+    startT: 'タップでスタート', helpT: '左の親指: 移動      右の親指: 水をまく      炎は水で消そう', tapAgain: 'タップでもう一度', langT: '{name} ▸', rotate: 'スマホを横にしてください',
     page: 'レインガール - 第1章', title: 'レインガール', chapter: '第1章 · 燃える森', start: 'Space でスタート',
     help: '移動: 矢印キー / WASD      水をまく: Space / J      炎は水で消そう', lang: 'L: 言語',
     rankFail: 'ランキングに載せられませんでした: {why}', clear: 'クリア', boardMonth: '— {month}のランキング —', boardLocal: '— このパソコンのランキング —', noScores: 'まだ記録がありません',
@@ -43,6 +46,7 @@ const WORDS = {
     wave: '炎モンスター {m}  ·  ラウンド {n} / {of}',
   },
   zh: {
+    startT: '点击屏幕开始', helpT: '左手拇指: 移动      右手拇指: 洒水      用水扑灭火焰', tapAgain: '点击屏幕再玩一次', langT: '{name} ▸', rotate: '请把手机横过来',
     page: '雨衣女孩 - 第1章', title: '雨衣女孩', chapter: '第1章 · 燃烧的森林', start: '按 Space 开始',
     help: '移动: 方向键 / WASD      洒水: Space / J      用水扑灭火焰', lang: 'L: 语言',
     rankFail: '没能上榜: {why}', clear: '通关', boardMonth: '— {month}排行榜 —', boardLocal: '— 本机排行榜 —', noScores: '还没有记录',
@@ -56,6 +60,7 @@ const WORDS = {
     wave: '火焰怪物 {m}  ·  第 {n} / {of} 轮',
   },
   es: {
+    startT: 'Toca para empezar', helpT: 'Pulgar izquierdo: mover      Pulgar derecho: rociar      El agua apaga el fuego', tapAgain: 'Toca para jugar otra vez', langT: '{name} ▸', rotate: 'Gira el teléfono',
     page: 'Rain Girl - Capítulo 1', title: 'Rain Girl', chapter: 'Capítulo 1 · El bosque en llamas', start: 'Pulsa Espacio para empezar',
     help: 'Mover: flechas / WASD      Rociar: Espacio / J      El agua apaga el fuego', lang: 'L: idioma',
     rankFail: 'No entró en la tabla: {why}', clear: 'FIN', boardMonth: '— {month} —', boardLocal: '— este ordenador —', noScores: 'Aún no hay puntuaciones',
@@ -69,6 +74,7 @@ const WORDS = {
     wave: 'Monstruos de fuego {m}  ·  Ronda {n} / {of}',
   },
   pt: {
+    startT: 'Toque para começar', helpT: 'Polegar esquerdo: mover      Polegar direito: borrifar      A água apaga o fogo', tapAgain: 'Toque para jogar de novo', langT: '{name} ▸', rotate: 'Vire o celular de lado',
     page: 'Rain Girl - Capítulo 1', title: 'Rain Girl', chapter: 'Capítulo 1 · A floresta em chamas', start: 'Aperte Espaço para começar',
     help: 'Mover: setas / WASD      Borrifar: Espaço / J      A água apaga o fogo', lang: 'L: idioma',
     rankFail: 'Não entrou no placar: {why}', clear: 'FIM', boardMonth: '— {month} —', boardLocal: '— este computador —', noScores: 'Ainda sem pontuações',
@@ -89,4 +95,4 @@ let LANG = (() => {
 })();
 function T(key, v = {}) { const s = (WORDS[LANG] && WORDS[LANG][key]) ?? WORDS.en[key] ?? key; return s.replace(/\{(\w+)\}/g, (_, k) => (k in v ? v[k] : `{${k}}`)); }
 function monthName() { try { return new Date().toLocaleDateString({ en: 'en', ko: 'ko', ja: 'ja', zh: 'zh-CN', es: 'es', pt: 'pt-BR' }[LANG], { month: 'long' }); } catch (e) { return String(new Date().getMonth() + 1); } }
-function setLang(l) { LANG = l; try { localStorage.setItem('rain-girl-lang', l); } catch (e) {} document.documentElement.lang = l; document.title = T('page'); }
+function setLang(l) { LANG = l; try { localStorage.setItem('rain-girl-lang', l); } catch (e) {} document.documentElement.lang = l; document.title = T('page'); const r = document.getElementById('rotate'); if (r) r.textContent = T('rotate'); }

@@ -134,6 +134,14 @@ const PIX = {
 
 // the drawn facing for a direction: a diagonal as it is; straight across or up and down, the nearest diagonal - the one shown
 // last when two are as near (walking east after north-east stays north-east: no flicker)
+// the thumbs' places on a phone: where the stick rests, the umbrella's button, how far the stick goes
+const PAD_A = [118, H - 112], PAD_B = [W - 112, H - 112], PAD_R = 52;
+// a crown's clump at each pixel (clumps.js: runs of clump, count); a clump no number has is no leaf
+function clumpIds(base, w, h) {
+  const [cw, ch, runs] = CLUMP_PX[base], n = CLUMPS[base].length, a = new Uint8Array(w * h); if (cw !== w || ch !== h) return a;
+  for (let r = 0, i = 0; r < runs.length; r += 2) { const c = runs[r] <= n ? runs[r] : 0; a.fill(c, i, i + runs[r + 1]); i += runs[r + 1]; }
+  return a;
+}
 function diagOf(dx, dy, was) {
   const v = dy > 0 ? 'south' : dy < 0 ? 'north' : was.split('-')[0];
   const h = dx > 0 ? 'east' : dx < 0 ? 'west' : was.split('-')[1];
@@ -147,6 +155,18 @@ class Chapter1 extends Phaser.Scene {
   constructor() { super('chapter1'); }
 
   preload() {
+    // what is happening, in words on the page until the title is up - and a load that stops is let go: a sound that will not
+    // decode (an iPhone's way with some files) is left out, the game goes on without it
+    const boot = document.getElementById('boot'); let last = performance.now(), pct = 0;
+    this.load.on('progress', (v) => { pct = Math.round(v * 100); last = performance.now(); if (boot) boot.textContent = `Loading ${pct}%`; });
+    this.load.on('loaderror', (f) => { BOOT.lost.push(f.key); });
+    const watch = setInterval(() => {
+      if (!this.load.isLoading()) { clearInterval(watch); return; }
+      if (performance.now() - last < 8000) return;
+      last = performance.now(); const all = (q) => (Array.isArray(q.entries) ? q.entries.slice() : [...q]), stuck = [...all(this.load.queue), ...all(this.load.inflight)];
+      if (boot) boot.textContent = `Loading ${pct}% - skipping ${stuck.length} file(s) that did not open`;
+      for (const f of stuck) { BOOT.lost.push(f.key); try { f.onProcessError ? f.onProcessError() : this.load.nextFile(f, false); } catch (e) {} }
+    }, 1000);
     // a browser keeps pictures and sounds it has fetched; a changed one is fetched again only under a new address - ASSET_V, to raise
     // whenever a file in assets/ changes
     this.load.on('addfile', (key, type, loader, file) => { if (typeof file.url === 'string' && !file.url.includes('?') && !file.url.startsWith('data:')) file.url += `?v=${ASSET_V}`; });
@@ -156,11 +176,11 @@ class Chapter1 extends Phaser.Scene {
     }
     for (const f of DIAG) this.load.spritesheet(`trail-${f}`, `assets/girlpx/trails/slash-${f}.png`, { frameWidth: TRAIL[f].w, frameHeight: TRAIL[f].h });
     // the music (Suno) and the sounds (assets/audio/CREDITS.md)
-    for (const n of ['hit_wet_0', 'hit_wet_1', 'douse_out', 'thunder_0', 'thunder_1', 'step_puddle_0', 'step_puddle_1', ...[0, 1, 2, 3, 4].flatMap((i) => [`step_grass_${i}`, `step_dirt_${i}`])]) this.load.audio(n, `assets/audio/${n}.ogg`);
+    for (const n of ['hit_wet_0', 'hit_wet_1', 'douse_out', 'thunder_0', 'thunder_1', 'step_puddle_0', 'step_puddle_1', ...[0, 1, 2, 3, 4].flatMap((i) => [`step_grass_${i}`, `step_dirt_${i}`])]) this.load.audio(n, [`assets/audio/${n}.m4a`, `assets/audio/${n}.ogg`]);          // (m4a plays everywhere, an iPhone too; ogg for a browser without it)
     for (const n of ['bgm_stage', 'bgm_boss', 'bgm_title', 'fire_loop', 'rain_loop', 'spray_0', 'spray_1', 'jingle_clear', 'jingle_win', 'jingle_over', 'jingle_boss_in', 'hr_steam_0', 'poof_0',
-                     'hurt_cute_0', 'hurt_cute_1', 'cry_boss_0', 'shot_fire_0', 'hit_1', 'crit_0', 'coin_0', 'error_0', 'hit_soft_0', 'hit_soft_1']) this.load.audio(n, `assets/audio/${n}.ogg`);
+                     'hurt_cute_0', 'hurt_cute_1', 'cry_boss_0', 'shot_fire_0', 'hit_1', 'crit_0', 'coin_0', 'error_0', 'hit_soft_0', 'hit_soft_1']) this.load.audio(n, [`assets/audio/${n}.m4a`, `assets/audio/${n}.ogg`]);          // (m4a plays everywhere, an iPhone too; ogg for a browser without it)
     for (const k of Object.keys(SHADE)) this.load.image(`${k}-shade`, `assets/px/props/${k}-shade.png`);
-    for (const k of Object.keys(CLUMPS)) this.load.image(`${k}-clumps`, `assets/px/props/${k}-clumps.png`);          // (the crowns' clumps of leaves, for the wind)          // (the props' shadows, baked from 3D)
+    // (the crowns' clumps of leaves, for the wind, come as numbers: clumps.js)          // (the props' shadows, baked from 3D)
     for (const f of DIAG) this.load.image(`hurt-${f}`, `assets/girlpx/hurt-${f}.png`);          // (hit: the standing frame with the eyes squeezed shut - the faces that show)
     for (const n of ['normal', 'hurt', 'dead']) this.load.image(`fire-${n}`, `assets/px/fire-${n}.png`);
     for (let j = 0; j < 5; j++) this.load.image(`puddle-${j}`, `assets/px/puddle-${j}.png`);          // (round puddles, big to tiny: drawn by GPT)
@@ -233,12 +253,12 @@ class Chapter1 extends Phaser.Scene {
   swayData(key) {
     this.swayD = this.swayD || {}; if (this.swayD[key]) return this.swayD[key];
     const read = (k) => { const im = this.textures.get(k).getSourceImage(), c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const g = c.getContext('2d'); g.drawImage(im, 0, 0); return g.getImageData(0, 0, im.width, im.height); };
-    const base = key.replace('bush-burnt', 'bush'), src = read(key), w = src.width, h = src.height, cl = CLUMPS[base] && this.textures.exists(`${base}-clumps`) && !key.includes('burnt') ? read(`${base}-clumps`).data : null;
-    const pix = []; if (cl) for (let i = 0; i < w * h; i++) { const c = cl[i * 4]; if (c) (pix[c - 1] = pix[c - 1] || []).push(i); }          // (each clump's pixels)
+    const base = key.replace('bush-burnt', 'bush'), src = read(key), w = src.width, h = src.height, cl = CLUMPS[base] && CLUMP_PX[base] && !key.includes('burnt') ? clumpIds(base, w, h) : null;
+    const pix = []; if (cl) for (let i = 0; i < w * h; i++) { const c = cl[i]; if (c) (pix[c - 1] = pix[c - 1] || []).push(i); }          // (each clump's pixels)
     if (cl && !key.startsWith('mushrooms')) {
       // (the dark line round the crown is not green, so no clump had it - and it stood where it was while its leaves moved off. A
       // pixel of the picture at its edge, no clump's, with two or more leaves of clumps round it, goes with the clump most of them are)
-      const id = (x, y) => x < 0 || y < 0 || x >= w || y >= h ? 0 : cl[(y * w + x) * 4], clear = (x, y) => x < 0 || y < 0 || x >= w || y >= h || src.data[(y * w + x) * 4 + 3] < 128, add = [];
+      const id = (x, y) => x < 0 || y < 0 || x >= w || y >= h ? 0 : cl[y * w + x], clear = (x, y) => x < 0 || y < 0 || x >= w || y >= h || src.data[(y * w + x) * 4 + 3] < 128, add = [];
       for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
         if (clear(x, y) || id(x, y) || !(clear(x - 1, y) || clear(x + 1, y) || clear(x, y - 1) || clear(x, y + 1))) continue;
         const n = {}; let top = 0, cnt = 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const c = id(x + dx, y + dy); if (c) { n[c] = (n[c] || 0) + 1; cnt++; if (n[c] > (n[top] || 0)) top = c; } }
@@ -266,7 +286,7 @@ class Chapter1 extends Phaser.Scene {
     const clean = key.startsWith('mushrooms'), bare = [], put = new Uint8Array(W2 * h), rose = new Uint8Array(w * h);          // (put: where a clump was laid; rose: the pixels of the caps that went up this frame)
     if (clean) for (const q of pix) for (const i of q || []) { const j2 = (Math.floor(i / w) * W2 + i % w + a) * 4; o[j2 + 3] = 0; bare.push(i); }
     for (let k = 0; k < pix.length; k++) {          // (then each clump, far to near, a pixel aside or up by its place in the beat)
-      if (!pix[k]) continue; const [cx, cy] = at[k], th = 2 * Math.PI * (f / BEAT - cx * 0.55 - (k % 3) * 0.11), up = cy / tall;
+      if (!pix[k] || !at[k]) continue; const [cx, cy] = at[k], th = 2 * Math.PI * (f / BEAT - cx * 0.55 - (k % 3) * 0.11), up = cy / tall;
       const ln = Math.abs(lean) === 1 ? (up > 0.72 ? 1 : 0) : Math.abs(lean) === 2 ? (up > 0.72 ? 2 : up > 0.45 ? 1 : 0) : 0;          // (a gust: first the top clumps a pixel, then those two and the middle one)
       // (a mushroom does not stir: a stiff little thing, it only gives a pixel at the cap when a gust leans on it - the steady nodding
       // made for leaves read as a tremble on it)
@@ -380,6 +400,11 @@ class Chapter1 extends Phaser.Scene {
   }
 
   create() {
+    BOOT.el.textContent = 'Building the forest...';
+    // a sound that did not load is silence, not an error
+    { const has = (k) => this.cache.audio.exists(k), add = this.sound.add.bind(this.sound), play = this.sound.play.bind(this.sound);
+      const none = () => ({ key: '', isPlaying: false, rate: 1, volume: 0, play() {}, stop() {}, setVolume() { return this; }, once(e, f) { if (e === 'complete' && f) setTimeout(f, 0); return this; } });
+      this.sound.add = (k, c) => (has(k) ? add(k, c) : none()); this.sound.play = (k, c) => has(k) && play(k, c); }
     for (const [k, v] of Object.entries(PIX)) this.pix(k, v);
     for (const k of ['blue', 'green', 'purple']) for (let i = 0; i < 3; i++) this.recolour(`flame-${i}`, k);          // (GPT's flame, in each fire's colour)
     for (const k of ['red', 'blue', 'green', 'purple']) for (let i = 0; i < 3; i++) { this.smaller(flameKey(i, k), '-m', 0.66); this.smaller(flameKey(i, k), '-s', 0.42); }
@@ -441,6 +466,27 @@ class Chapter1 extends Phaser.Scene {
     this.swingAsked = false;
     for (const kk of ['SPACE', 'J']) this.input.keyboard.on(`keydown-${kk}`, () => { this.swingAsked = true; });
 
+    // TOUCH: a phone gets a stick under the left thumb and the umbrella under the right; a computer never sees them. Which it is
+    // follows what is used - a finger on the screen turns them on, a key turns them off. The fingers are read from the page, not
+    // the canvas: on a wide phone the thumbs rest on the bars beside the picture
+    this.touch = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches); this.fingers = new Map(); this.stick = null; this.stateAt = 0;
+    this.padG = this.add.graphics().setDepth(6500); this.padDrop = this.add.image(PAD_B[0], PAD_B[1], 'bigdrop').setScale(2).setDepth(6501).setAlpha(0.7).setVisible(false);
+    const at = (t) => { const dx = t.clientX - innerWidth / 2, dy = t.clientY - innerHeight / 2, [lx, ly] = FIT.turned ? [dy, -dx] : [dx, dy]; return [lx / FIT.k + W / 2, ly / FIT.k + H / 2]; };          // (a finger's place in the picture, turned or not)
+    // (the name box: while it is open the fingers are its own - and for a moment after it shuts, so a button pressed twice does not start a game)
+    let shutAt = -1e9, wasOpen = false; const boxOpen = () => { const o = document.getElementById('namebox').style.display === 'flex'; if (wasOpen && !o) shutAt = performance.now(); wasOpen = o; return o || performance.now() - shutAt < 700; };
+    setInterval(boxOpen, 100);
+    this.onTouch = (e) => {
+      if (boxOpen()) return;
+      for (const t of e.changedTouches) {
+        const [x, y] = at(t);
+        if (e.type === 'touchstart') { this.fingers.set(t.identifier, { x0: x, y0: y, x, y }); if (!this.touch) { this.touch = true; this.retext(); } this.tap(x, y); }
+        else if (e.type === 'touchmove') { const f = this.fingers.get(t.identifier); if (f) { f.x = x; f.y = y; } }
+        else { this.fingers.delete(t.identifier); if (this.stick === t.identifier) this.stick = null; }
+      }
+    };
+    for (const ev of ['touchstart', 'touchmove', 'touchend', 'touchcancel']) window.addEventListener(ev, this.onTouch, { passive: true });
+    this.input.keyboard.on('keydown', () => { if (this.touch) { this.touch = false; this.fingers.clear(); this.stick = null; this.retext(); } });
+
     this.rain = Array.from({ length: 110 }, () => this.newDrop(true));
     this.rainG = this.add.graphics().setDepth(5000);
 
@@ -460,14 +506,17 @@ class Chapter1 extends Phaser.Scene {
     this.dim = this.add.rectangle(0, 0, W, H, 0x10140c, 0.5).setOrigin(0).setDepth(6900);
     this.boardText = txt(W / 2 - 165, 346, 11, '#ffe6b0').setOrigin(0.5, 0).setDepth(7000).setLineSpacing(3);          // (this month's best ten)
     this.boardText2 = txt(W / 2 + 200, 346, 11, '#ffe6b0').setOrigin(0.5, 0).setDepth(7000).setLineSpacing(3);         // (the best three ever, and who is signed in)
+    this.langBtn = txt(W - 14, 12, 22, '#ffe6b0').setOrigin(1, 0).setDepth(7000);          // (on a phone: the language, tapped)
     this.titleScreen(); setLang(LANG);
     // back from the GitHub sign-in: the score that was waiting goes up under their GitHub name
     Ranking.fromSignIn().then(async (pending) => { if (pending) { const r = await Ranking.submit(pending); if (!r.ok) this.say(T('rankFail', { why: r.why })); } this.showBoard(); });
     // sound: the rain all the time, the fire as loud as there is fire on the ground, one music at a time; browsers let sound start
     // only after a key is pressed - the title's music starts with the first one
     this.rainS = this.sound.add('rain_loop', { loop: true, volume: 0.22 }); this.fireS = this.sound.add('fire_loop', { loop: true, volume: 0 });
-    this.input.keyboard.once('keydown', () => { this.rainS.play(); this.fireS.play(); if (!this.music) this.playMusic('bgm_title'); });
+    const sounds = () => { if (this.rainS.isPlaying) return; this.rainS.play(); this.fireS.play(); if (!this.music) this.playMusic('bgm_title'); };
+    this.input.keyboard.once('keydown', sounds); window.addEventListener('touchend', () => (this.sound.locked ? this.sound.once('unlocked', sounds) : sounds()), { once: true, passive: true });
     window.G = this;                             // for tests
+    BOOT.up();
   }
 
   playMusic(key, vol = 0.45, rate = 1) {
@@ -478,9 +527,42 @@ class Chapter1 extends Phaser.Scene {
   sfx(key, vol = 0.6, x = null, det = 80) { if (Array.isArray(key)) key = key[Math.floor(Math.random() * key.length)]; this.sound.play(key, { volume: vol, detune: Phaser.Math.Between(-det, det), pan: x === null ? 0 : Phaser.Math.Clamp((x - W / 2) / (W / 2), -1, 1) * 0.7 }); }
   jingle(key, then) { if (this.music) this.music.stop(); this.music = null; const j = this.sound.add(key, { volume: 0.6 }); j.once('complete', () => then && then()); j.play(); }
 
-  titleScreen() { this.showTitle(T('title'), `${T('chapter')}\n\n${T('start')}`); this.help.setText(T('help')); this.showBoard(); }
-  showTitle(a, b) { this.banner.setText(a); this.sub.setText(b); this.dim.setVisible(true); this.boardText.setVisible(true); this.boardText2.setVisible(true); }
-  hideTitle() { this.banner.setText(''); this.sub.setText(''); this.dim.setVisible(false); this.boardText.setVisible(false); this.boardText2.setVisible(false); }
+  titleScreen() { this.showTitle(T('title'), `${T('chapter')}\n\n${T(this.touch ? 'startT' : 'start')}`); this.showBoard(); }
+  // (an end screen's last line says which key plays again: on a phone, a tap)
+  showTitle(a, b) { this.shown = [a, b]; this.banner.setText(a); this.sub.setText(this.touch && this.state !== 'title' ? b.replace(/[^\n]*$/, T('tapAgain')) : b); this.dim.setVisible(true); this.boardText.setVisible(true); this.boardText2.setVisible(true); this.retext(false); }
+  hideTitle() { this.shown = null; this.banner.setText(''); this.sub.setText(''); this.dim.setVisible(false); this.boardText.setVisible(false); this.boardText2.setVisible(false); this.retext(false); }
+  // the words that name a key, for keys or for fingers
+  retext(all = true) {
+    this.help.setText(T(this.touch ? 'helpT' : 'help')); this.langBtn.setText(this.touch && this.state === 'title' ? T('langT', { name: LANG_NAME[LANG] }) : '');
+    if (all && this.shown) { if (this.state === 'title') this.titleScreen(); else this.showTitle(...this.shown); }
+  }
+  // a finger put down: on the title it starts the game (on the language, the next language); on an end screen it plays again
+  tap(x, y) {
+    if (this.state === 'play' || this.time.now - this.stateAt < 1500) return;
+    if (this.state === 'title') { if (x > W - 300 && y < 60) { setLang(LANGS[(LANGS.indexOf(LANG) + 1) % LANGS.length]); this.titleScreen(); return; } }
+    this.fingers.clear(); this.stick = null; this.start();
+  }
+  // the thumbs in a round: [dx, dy, swing]. The stick begins where the left thumb comes down and gives the eight ways she walks
+  // (the ground is drawn 2:1, so a thumb along a tile's edge walks along it); any finger on the right half swings
+  thumbs() {
+    let dx = 0, dy = 0, swing = false;
+    if (this.stick !== null && !this.fingers.has(this.stick)) this.stick = null;
+    for (const [id, f] of this.fingers) { if (f.x0 >= W / 2) swing = true; else if (this.stick === null) this.stick = id; }
+    const f = this.stick !== null && this.fingers.get(this.stick);
+    if (f) {
+      const vx = f.x - f.x0, vy = f.y - f.y0, n = Math.hypot(vx, vy);
+      if (n > PAD_R) { f.x0 = f.x - vx / n * PAD_R; f.y0 = f.y - vy / n * PAD_R; }          // (the stick comes along with a thumb that goes far)
+      if (n > 12) { const a = Math.round(Math.atan2(vy * 2, vx) / (Math.PI / 4)) * Math.PI / 4; dx = Math.round(Math.cos(a)); dy = Math.round(Math.sin(a)); }
+    }
+    return [dx, dy, swing];
+  }
+  drawPad() {
+    const g = this.padG.clear(), on = this.touch && this.state === 'play'; this.padDrop.setVisible(on); if (!on) return;
+    const f = this.stick !== null && this.fingers.get(this.stick), [sx, sy] = f ? [f.x0, f.y0] : PAD_A;
+    g.lineStyle(3, 0xfff3d6, f ? 0.5 : 0.22).strokeCircle(sx, sy, PAD_R); g.fillStyle(0xfff3d6, f ? 0.5 : 0.18).fillCircle(f ? f.x : sx, f ? f.y : sy, 20);
+    const down = [...this.fingers.values()].some((q) => q.x0 >= W / 2);
+    g.fillStyle(0x8fd0ff, down ? 0.42 : 0.2).fillCircle(PAD_B[0], PAD_B[1], 46); g.lineStyle(3, 0xbfe8ff, down ? 0.75 : 0.4).strokeCircle(PAD_B[0], PAD_B[1], 46);
+  }
 
   // THE LEADERBOARD (ranking.js): the best ten under the title; at the end of a game, a name asked for and the score sent
   async showBoard() {          // this month's best ten, the best three ever (a GitHub player marked @)
@@ -488,7 +570,7 @@ class Chapter1 extends Phaser.Scene {
     const row = (e, i) => `${String(i + 1).padStart(2, ' ')}. ${((e.github ? '@' : '') + e.name).slice(0, 13).padEnd(13, ' ')} ${String(e.score).padStart(6, ' ')}  ${e.won ? T('clear') : `R${e.round}`}`;
     this.boardText.setText([on ? T('boardMonth', { month: monthName() }) : T('boardLocal'), ...(month.length ? month.map(row) : [T('noScores')])].join('\n'));
     const me = Ranking.who();
-    this.boardText2.setText([on ? T('boardEver') : T('boardEverLocal'), ...(ever.length ? ever.map(row) : [T('none')]), '', on ? (me ? T('signedIn', { me }) : Ranking.canSignIn() ? T('signInHint') : '') : '', '', T('lang') + ' (' + LANG_NAME[LANG] + ')'].join('\n'));
+    this.boardText2.setText([on ? T('boardEver') : T('boardEverLocal'), ...(ever.length ? ever.map(row) : [T('none')]), '', on ? (me ? T('signedIn', { me }) : Ranking.canSignIn() ? T('signInHint') : '') : '', '', this.touch ? '' : T('lang') + ' (' + LANG_NAME[LANG] + ')'].join('\n'));
   }
   askName(entry) {          // at the end: up under their GitHub name (signed in, or signing in now) or a guest's name - or not at all
     const box = document.getElementById('namebox'), form = box.querySelector('form'), input = box.querySelector('input'), skip = box.querySelector('#skip');
@@ -588,6 +670,8 @@ class Chapter1 extends Phaser.Scene {
 
   step(time, dtMs) {
     const dt = Math.min(dtMs, 50) / 1000, k = this.keys;
+    if (this.state !== this.wasState) { this.wasState = this.state; this.stateAt = this.time.now; this.retext(false); }
+    this.drawPad();
     if (this.state !== 'play') {
       if (this.state === 'title' && Phaser.Input.Keyboard.JustDown(k.L)) { setLang(LANGS[(LANGS.indexOf(LANG) + 1) % LANGS.length]); this.titleScreen(); }          // (the language, round the six)
       if ((this.state === 'title' && (Phaser.Input.Keyboard.JustDown(k.SPACE) || Phaser.Input.Keyboard.JustDown(k.ENTER))) ||
@@ -615,6 +699,7 @@ class Chapter1 extends Phaser.Scene {
     // walking (not while swinging)
     let dx = (k.D.isDown || k.RIGHT.isDown) - (k.A.isDown || k.LEFT.isDown);
     let dy = (k.S.isDown || k.DOWN.isDown) - (k.W.isDown || k.UP.isDown);
+    if (this.touch) { const th = this.thumbs(); if (th[0] || th[1]) { dx = th[0]; dy = th[1]; } if (th[2]) this.swingAsked = true; }
     if (window.BOT) { const b = window.BOT(this); dx = b[0]; dy = b[1]; if (b[2]) this.swingAsked = true; }          // (tests: a bot plays)
     g.moving = false;
     if (!g.attack && (dx || dy)) {
@@ -1210,8 +1295,19 @@ class Chapter1 extends Phaser.Scene {
 }
 
 // the letters are pixels too: start once the pixel font is there
-document.fonts.load(`12px ${FONT}`).catch(() => {}).then(() => new Phaser.Game({
+// (the font is waited for 3 s at most: a phone that never answers still gets its game)
+// THE PICTURE IN THE WINDOW: whole and in the middle, as large as fits. A phone held upright gets it turned a quarter, filling the
+// screen - the player holds the phone sideways; a phone that turns its own screen is sideways already and gets it as it is
+const FIT = { k: 1, turned: false };
+function fit() {
+  const coarse = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches), w = innerWidth, h = innerHeight; FIT.turned = coarse && h > w;
+  const [aw, ah] = FIT.turned ? [h, w] : [w, h]; FIT.k = Math.min(aw / W, ah / H); const st = document.documentElement.style;
+  st.setProperty('--gw', `${W * FIT.k}px`); st.setProperty('--gh', `${H * FIT.k}px`); st.setProperty('--turn', FIT.turned ? '90deg' : '0deg'); document.body.classList.toggle('turned', FIT.turned);
+}
+fit(); for (const ev of ['resize', 'orientationchange']) window.addEventListener(ev, () => { fit(); setTimeout(fit, 300); });
+BOOT.el.textContent = 'Getting the font...';
+Promise.race([document.fonts.load(`12px ${FONT}`).catch(() => {}), new Promise((r) => setTimeout(r, 3000))]).then(() => { BOOT.el.textContent = 'Starting the game...'; return new Phaser.Game({
   type: Phaser.AUTO, width: W, height: H, backgroundColor: '#1d2318', parent: document.body, pixelArt: true, roundPixels: true,
-  scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+  scale: { mode: Phaser.Scale.NONE, autoCenter: Phaser.Scale.NO_CENTER },          // (fitted by `fit`, below)
   scene: [Chapter1],
-}));
+}); });

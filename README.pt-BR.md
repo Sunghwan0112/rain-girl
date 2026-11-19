@@ -18,6 +18,7 @@ Um pequeno jogo de ação em pixel art para jogar no navegador: sem instalar nad
 | **Balançar o guarda-chuva (jogar água)** | Space / J |
 | **Trocar o idioma** | L, na tela de título |
 | **Jogar de novo** | R |
+| **No celular ou tablet** | polegar esquerdo: mover · polegar direito: balançar o guarda-chuva · toque para começar (o jogo muda para toque sozinho) |
 
 Monstros de fogo pulam pela floresta. Onde eles caem, a grama pega fogo; o fogo se espalha, o chão em chamas bloqueia o caminho e as árvores queimam. Apague os monstros, e os fogos que eles deixam, antes que a floresta queime.
 

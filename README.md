@@ -17,6 +17,7 @@ A small pixel-art action game you play in the browser - no install, no account.<
 | **Swing the umbrella** (throw water) | Space / J |
 | **Change the language** | L, on the title screen |
 | **Play again** | R |
+| **On a phone or tablet** | left thumb: move · right thumb: swing · tap to start (the game turns to touch by itself) |
 
 Fire monsters hop through the forest. Where they land, the grass catches; the fire spreads, burning ground blocks your way, and trees
 go up in flames. Put the monsters out - and the fires they leave - before the forest burns.

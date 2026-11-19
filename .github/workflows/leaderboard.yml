@@ -1,0 +1,17 @@
+name: leaderboard picture
+# every half hour: the board read from Supabase (the address and public key in ranking-config.js) and drawn as leaderboard.svg for the READMEs
+on:
+  schedule: [{ cron: '*/30 * * * *' }]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  draw:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tools/leaderboard_svg.py
+      - run: |
+          git diff --quiet -- leaderboard.svg && exit 0
+          git config user.name "leaderboard bot"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add leaderboard.svg; git commit -m "leaderboard picture"; git push

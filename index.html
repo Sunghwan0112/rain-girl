@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="ko">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>우비소녀의 여행 - 1장</title>
+<title>Rain Girl - Chapter 1</title>
 <style>
   @font-face { font-family: 'Galmuri11'; src: url('assets/font/Galmuri11.woff2') format('woff2'); }
   html, body { margin: 0; height: 100%; background: #1d2318; }
@@ -13,13 +13,21 @@
   #namebox form { background: #2b2418; border: 4px solid #fff3d6; padding: 18px 22px; color: #fff3d6; text-align: center; image-rendering: pixelated; }
   #namebox input { font: 22px 'Galmuri11', sans-serif; width: 12ch; margin: 10px 0; padding: 4px 8px; background: #fff3d6; color: #2b2418; border: 0; text-align: center; }
   #namebox button { font: 16px 'Galmuri11', sans-serif; background: #f2c21b; color: #2b2418; border: 0; padding: 6px 14px; cursor: pointer; }
+  #namebox #gh, #namebox #asme { background: #fff3d6; }
 </style>
 </head>
 <body>
-<div id="namebox"><form><div>랭킹에 올릴 이름</div><input maxlength="12" autocomplete="off"><br><button>올리기</button> <button type="button" id="skip">안 올리기</button></form></div>
+<div id="namebox"><form>
+  <div id="nb-score"></div>
+  <div id="nb-gh" style="margin:10px 0"><button type="button" id="gh">Sign in with GitHub to post</button></div>
+  <div id="nb-me" style="margin:10px 0;display:none"><button type="button" id="asme"></button> <button type="button" id="out" style="background:#9aa1b2">Sign out</button></div>
+  <div id="nb-guest" style="opacity:.8;margin-top:6px">or as a guest</div><input maxlength="12" autocomplete="off"><br><button>Post</button> <button type="button" id="skip">Skip</button>
+  <div id="nb-msg" style="margin-top:8px;color:#ffb0a0;min-height:1em"></div></form></div>
 <script src="phaser.min.js"></script>
-<script src="assets/girlpx/pixel.js"></script>
+<script src="assets/girlpx/pixel.js?v=6"></script>
 <script src="assets/px/props/foot.js"></script>
+<script src="assets/px/props/hit.js"></script>
+<script src="i18n.js"></script>
 <script src="ranking-config.js"></script>
 <script src="ranking.js"></script>
 <script src="game.js"></script>

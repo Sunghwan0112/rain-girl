@@ -1,0 +1,42 @@
+Rain Girl (우비소녀의 여행) is under two licences: one for its code, one for the game itself.
+
+1. THE CODE - MIT
+
+game.js, ranking.js, ranking-config.js, i18n.js, index.html, tools/, supabase/ and .github/ are under the MIT License:
+
+Copyright (c) 2026 Sunghwan Baek
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+2. THE GAME'S ART, MUSIC AND NAME - ALL RIGHTS RESERVED
+
+Copyright (c) 2026 Sunghwan Baek. All rights reserved.
+
+Everything in assets/ and docs/ that is not listed in part 3 - the girl's sprites, the fire monsters, the forest's props, the
+ground and the map, the effects, the music (bgm_stage, bgm_boss, bgm_title) - and the names "Rain Girl" and "우비소녀의 여행"
+are not under the MIT License. You may play the game, and download these files to run it for yourself. You may not copy them
+into another work, publish them again, or sell them, in whole or in part, without written permission.
+
+Screenshots and videos of play are welcome.
+
+3. OTHER PEOPLE'S WORK - each under its own licence
+
+- phaser.min.js: Phaser 3, MIT, (c) Phaser Studio Inc.
+- assets/font/Galmuri11: SIL Open Font License 1.1, (c) Lee Minseo - assets/font/OFL.md
+- the sound effects listed as CC0 in assets/audio/CREDITS.md: public domain (CC0)

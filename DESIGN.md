@@ -23,7 +23,7 @@ Ten rounds; the last has a crowned blue boss. Arrow keys / WASD move, Space / J 
 | Trees | a green tree with fire at its foot may catch and burns ~10 s: water within 4 s (`TREE_SAVE`) saves it (green again, a moment darker); after 4 s it is half burnt (its picture changes while it burns) and stays so if put out; left 10 s, burnt. A half-burnt tree can catch again |
 | Rocks | three boulders: walked round, like a tree trunk |
 | Bushes | catch the same way, burn ~7 s, saved within 4 s; walked through, not round |
-| Puddles | 2-3 a round, somewhere new; fire does not catch on them, fireballs die in them; dry up 22-35 s in |
+| Puddles | 2-3 a round, somewhere new; fire does not catch on them, fireballs die in them; a fire monster landing in one loses 1 hp and boils 4 s of the puddle's life away; dry up 22-35 s in |
 | Drops | a monster put out leaves one 30 % of the time (the boss always): a heart and 40 water |
 
 ### The fires
@@ -65,18 +65,26 @@ The hook stays in the game for this: `window.BOT = (scene) => [dx, dy, swing]`, 
 | The weather | a dark rainy layer over the world (a quarter-size picture, so the light comes in 4-pixel steps), a hole of firelight round every fire, monster and fireball, a little round her; browner and darker the more is burning; lightning every 11-24 s - a flash in two steps, the shadows deep, thunder after (later and softer when far), a shake when near |
 | Fire on the ground, drawn | each square's flame anywhere in it, on about half the squares, its own size and beat; it catches small, burns up, dies down to a lick; the burning and ash diamonds spill past their edges in ragged clumps (overlapping where both burn - the same ground), soot past the edge; smoke and steam rise, sparks fly |
 | Contact | footsteps by the ground (grass, the path, a puddle) with water kicked up; raindrops splash where they land; on a puddle a ring spreads by the drop's size (three sizes, now and then a second ring inside), drawn a pixel at a time and only on the water. The puddles' water is see-through (the ground under it shows); the rings GPT had drawn into them were painted out, so only the live ones move; sounds come from where they are (left/right); the fire's roar as loud as the fire near her, from its side; the boss's arrival shakes the screen |
-| The props alive | the wind: three frames each, the top a pixel or two aside (whole pixels); a big one goes see-through when someone is behind it; the fire's light warms the props near it in four steps; rain rings on the puddles |
-| Shadows | the girl's from 3D; the trees' cast from their outlines in the same direction and strength |
+| The props alive | the wind: a crown is boughs, not one sheet - its leaves are cut into clumps from the tree's 3D model (`tools/hitmask.py`: each leaf pixel takes the model's point it shows, the points grouped by where they are in 3D; 12 clumps a tree, 3 a bush) and each clump moves whole, a pixel at a time, far ones laid first; the trunk, branches and anything burnt stand still; each clump has its own moment in a 12-frame beat, and in a gust - gusts run across the forest the wind's way - the top clumps lean a pixel, then the middle ones too; a big one goes see-through when someone is behind it; the fire's light warms the props near it in four steps; rain rings on the puddles Mushrooms do not stir - they stand, and the cap gives a pixel when a gust leans on it (the steady nod made for leaves read as a tremble): too small for the model to tell one cap from the next, their caps are read off the sprite (its red patches); the caps are red, orange or wine (`CAP_HUES`), each cap of a patch its own or all the one. Five patches, placed by hand (`MUSHROOMS`): one at a tree and no more, at wood only (a stump, a tree's foot, a dead tree - never a rock), on its shadow side (lower left) - the two stumps, two trees' feet, and the one wine patch by the dead tree. |
+| Shadows | the girl's from 3D; the props' baked from their 3D models by SpriteCast's way (`tools/hitmask.py`): the sun's light and the sky's, deep close by, paler far out, the real sun's size, five steps; in a prop's shade she is darker (her feet, middle and head each read the shadow where the line from them away from the sun comes down, only from props taller than that) |
 | Hearts, fireball, steam, drops, glow, rain | a few pixels each, made in code |
 
 ## The sounds
 See `assets/audio/CREDITS.md`: the music made with Suno; CC0 sounds from Kenney and OpenGameArt; some made in code.
 Jingles were chosen by measuring their key and the way the tune goes (a round won: major and rising; lost: minor and falling).
 
+## Languages
+`i18n.js`: every word the game shows in English (the default), Korean, Japanese, Simplified Chinese, Spanish and Portuguese. The
+player's choice is kept (L on the title screen cycles them; `?lang=ko` in the address picks one), else the browser's language if it is
+one of these, else English. Galmuri11 has Latin, Korean and Japanese; a Chinese letter it lacks comes from the system's CJK font.
+
 ## The leaderboard
-`ranking.js`: Supabase when `ranking-config.js` has its address, the player's browser otherwise. Sign-in with GitHub fills the name
-(guests type one). `supabase/schema.sql` - anyone may add a score and read; `supabase/functions/leaderboard-svg` - the board as a
-picture for a README. Planned: this month's ten and the best three ever.
+`ranking.js`: Supabase when `ranking-config.js` has its address, the player's browser otherwise. Two boards: this month's best ten and
+the best three ever (title screen; `leaderboard.svg` for the READMEs, redrawn every half hour by a GitHub Action from
+`tools/leaderboard_svg.py`). At the end of a game: sign in with GitHub (Supabase's own sign-in page; the score waits and goes up on the
+way back, under the GitHub name, which the database takes from the sign-in), or a guest name, or not at all. `supabase/schema.sql`:
+anyone may read and add; nobody may change or delete; the database fills in who and when and refuses a score a played game cannot
+make (more than 3200 a round, three stars a round, a win before round 10), and one signed-in player one score every 20 s.
 
 ## Files
 `index.html`, `game.js` (the game), `ranking*.js`, `assets/girlpx/` (the girl and `pixel.js`, her frame data), `assets/px/` (the rest of

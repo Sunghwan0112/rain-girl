@@ -1,4 +1,4 @@
-<h1 align="center">Rain Girl · 우비소녀의 여행</h1>
+<h1 align="center">Rain Girl</h1>
 
 <p align="center"><b>A rainy forest is on fire. A girl in a yellow raincoat has an umbrella full of water.</b><br>
 A small pixel-art action game you play in the browser - no install, no account.</p>

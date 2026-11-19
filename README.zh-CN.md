@@ -1,4 +1,4 @@
-<h1 align="center">Rain Girl · 雨衣女孩</h1>
+<h1 align="center">雨衣女孩</h1>
 
 <p align="center"><b>下着雨的森林着火了。穿黄色雨衣的女孩有一把装满水的伞。</b><br>
 一个在浏览器里直接玩的像素风小动作游戏 —— 不用安装,不用注册。</p>

@@ -3,11 +3,11 @@
 <p align="center"><b>A rainy forest is on fire. A girl in a yellow raincoat has an umbrella full of water.</b><br>
 A small pixel-art action game you play in the browser - no install, no account.</p>
 
-<p align="center"><a href="https://sunghwan0112.github.io/rain-girl/"><b>▶ Play it now</b></a> &nbsp;·&nbsp; <a href="#how-to-play">How to play</a> &nbsp;·&nbsp; <a href="#the-leaderboard">Leaderboard</a> &nbsp;·&nbsp; <a href="#how-it-was-made">How it was made</a> &nbsp;·&nbsp; <a href="README.ko.md">한국어</a></p>
+<p align="center"><a href="https://sunghwan0112.github.io/rain-girl/"><b>▶ Play it now</b></a> &nbsp;·&nbsp; <a href="#how-to-play">How to play</a> &nbsp;·&nbsp; <a href="#the-leaderboard">Leaderboard</a> &nbsp;·&nbsp; <a href="#how-it-was-made">How it was made</a></p>
 
 <p align="center"><a href="https://sunghwan0112.github.io/rain-girl/"><img src="docs/play.gif" alt="Rain Girl: the girl swings her umbrella and throws water at fire monsters among pixel-art trees, rocks and burning grass in the rain" width="100%"></a></p>
 
-<p align="center">English · 한국어 · 日本語 · 简体中文 · Español · Português <i>(press L on the title screen)</i></p>
+<p align="center"><b>English</b> · <a href="README.ko.md">한국어</a> · <a href="README.ja.md">日本語</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.es.md">Español</a> · <a href="README.pt-BR.md">Português</a> <i>(press L on the title screen to change the game's language)</i></p>
 
 ## How to play
 

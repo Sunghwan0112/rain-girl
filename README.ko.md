@@ -3,11 +3,11 @@
 <p align="center"><b>비 오는 숲에 불이 났어요. 노란 우비를 입은 소녀에게는 물이 가득 담긴 우산이 있어요.</b><br>
 브라우저에서 바로 하는 작은 픽셀 아트 액션 게임 - 설치도, 가입도 필요 없어요.</p>
 
-<p align="center"><a href="https://sunghwan0112.github.io/rain-girl/"><b>▶ 지금 플레이하기</b></a> &nbsp;·&nbsp; <a href="#하는-법">하는 법</a> &nbsp;·&nbsp; <a href="#랭킹">랭킹</a> &nbsp;·&nbsp; <a href="#만든-방법">만든 방법</a> &nbsp;·&nbsp; <a href="README.md">English</a></p>
+<p align="center"><a href="https://sunghwan0112.github.io/rain-girl/"><b>▶ 지금 플레이하기</b></a> &nbsp;·&nbsp; <a href="#하는-법">하는 법</a> &nbsp;·&nbsp; <a href="#랭킹">랭킹</a> &nbsp;·&nbsp; <a href="#만든-방법">만든 방법</a></p>
 
 <p align="center"><a href="https://sunghwan0112.github.io/rain-girl/"><img src="docs/play.gif" alt="우비소녀의 여행: 비 오는 숲에서 소녀가 우산을 휘둘러 불꽃 몬스터에게 물을 뿌리는 장면" width="100%"></a></p>
 
-<p align="center">English · 한국어 · 日本語 · 简体中文 · Español · Português <i>(시작 화면에서 L)</i></p>
+<p align="center"><a href="README.md">English</a> · <b>한국어</b> · <a href="README.ja.md">日本語</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.es.md">Español</a> · <a href="README.pt-BR.md">Português</a> <i>(게임 언어는 시작 화면에서 L)</i></p>
 
 ## 하는 법
 

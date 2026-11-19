@@ -488,7 +488,7 @@ class Chapter1 extends Phaser.Scene {
     const row = (e, i) => `${String(i + 1).padStart(2, ' ')}. ${((e.github ? '@' : '') + e.name).slice(0, 13).padEnd(13, ' ')} ${String(e.score).padStart(6, ' ')}  ${e.won ? T('clear') : `R${e.round}`}`;
     this.boardText.setText([on ? T('boardMonth', { month: monthName() }) : T('boardLocal'), ...(month.length ? month.map(row) : [T('noScores')])].join('\n'));
     const me = Ranking.who();
-    this.boardText2.setText([on ? T('boardEver') : T('boardEverLocal'), ...(ever.length ? ever.map(row) : [T('none')]), '', on ? (me ? T('signedIn', { me }) : T('signInHint')) : '', '', T('lang') + ' (' + LANG_NAME[LANG] + ')'].join('\n'));
+    this.boardText2.setText([on ? T('boardEver') : T('boardEverLocal'), ...(ever.length ? ever.map(row) : [T('none')]), '', on ? (me ? T('signedIn', { me }) : Ranking.canSignIn() ? T('signInHint') : '') : '', '', T('lang') + ' (' + LANG_NAME[LANG] + ')'].join('\n'));
   }
   askName(entry) {          // at the end: up under their GitHub name (signed in, or signing in now) or a guest's name - or not at all
     const box = document.getElementById('namebox'), form = box.querySelector('form'), input = box.querySelector('input'), skip = box.querySelector('#skip');
@@ -498,8 +498,8 @@ class Chapter1 extends Phaser.Scene {
     document.getElementById('nb-score').textContent = T('nbScore', { score: entry.score, how: entry.won ? T('nbClear') : T('nbRound', { n: entry.round }) });
     for (const [id, k] of [['gh', 'gh'], ['out', 'out'], ['skip', 'skip']]) document.getElementById(id).textContent = T(k); form.querySelector('button:not([type])').textContent = T('send'); m.textContent = '';
     const who = Ranking.who(), on = Ranking.online();
-    document.getElementById('nb-guest').textContent = on ? T('nbGuest') : T('nbLocal');
-    document.getElementById('nb-gh').style.display = on && !who ? 'block' : 'none'; me.style.display = on && who ? 'block' : 'none'; asme.textContent = T('asMe', { who });
+    document.getElementById('nb-guest').textContent = on ? (Ranking.canSignIn() || who ? T('nbGuest') : T('nbName')) : T('nbLocal');          // (no sign-in to choose - inside another site's frame: just her name)
+    document.getElementById('nb-gh').style.display = on && !who && Ranking.canSignIn() ? 'block' : 'none'; me.style.display = on && who ? 'block' : 'none'; asme.textContent = T('asMe', { who });
     box.style.display = 'flex'; setTimeout(() => input.focus(), 50);
     const close = () => { form.onsubmit = null; skip.onclick = null; gh.onclick = null; asme.onclick = null; out.onclick = null; box.style.display = 'none';
       kb.enabled = true; kb.addCapture('W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,J,R,ENTER'); kb.resetKeys(); this.showBoard(); };

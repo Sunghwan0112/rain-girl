@@ -28,6 +28,10 @@ const Ranking = {
     } catch (e) { return { ok: false, why: 'no connection' }; }
   },
   // GitHub sign-in: off to Supabase's page and back here with the token in the address; the score waiting is kept to send on return
+  // Signing in with GitHub goes off to GitHub and comes back to this page's own address - which works where the game is the page
+  // (its own site, a local server) and not where it is shown inside another site's frame (itch.io and the like: the way back is
+  // not this page's to take). There, scores are posted as a guest and the button is not shown.
+  canSignIn() { let framed = false; try { framed = window.self !== window.top; } catch (e) { framed = true; } return this.online() && !framed && !/(^|\.)itch\.(io|zone)$/.test(location.hostname); },
   signIn(pending) {
     try { localStorage.setItem('rain-girl-pending', JSON.stringify(pending || null)); } catch (e) {}
     const back = location.origin + location.pathname; location.href = `${RANKING.url}/auth/v1/authorize?provider=github&redirect_to=${encodeURIComponent(back)}`;

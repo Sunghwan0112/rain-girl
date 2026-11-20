@@ -107,8 +107,10 @@ const PATH_Y = (x) => 500 - 0.5 * x + 18 * Math.sin(x / 90), PATH_HALF = 24;
 // that changes each round - the rain slants with it, the trees lean with it, smoke and sparks drift with it, the fire spreads with it
 const PROP_PPM = 74, PROP_TALL = { tree: 2.4, 'tree-half': 2.4, 'tree-burnt': 2.1, bush: 0.7, stump: 0.45, rock: 0.6, mushrooms: 0.35 };          // (the props' pixels a metre; how tall each is, m - SpriteCast's specs)
 const PROP_SHADOW = 1;          // (a prop's shadow as baked: its own steps of darkness are in its picture)
+const FIRE_SHADOW = 0.65;       // (under a fire: it makes its own light, so its shadow is small - but dark enough to stand it on the ground)
+const SHADOW_MORE = 0.6;        // (every baked shadow - the props' and hers - laid a second time at this much: 56 % at its deepest -> 71 %, 10 % at its far edge -> 16 %)
 const SHOT_UP = 35;          // (how high a fireball flies: it is shot from a monster's middle at hers)
-const DARK = 0.2, DARK_SMOKE = 0.12, LIGHTNING = [11, 24];          // (the dark's strength, and what the burning adds; seconds between flashes)
+const DARK = 0.11, DARK_SMOKE = 0.12, LIGHTNING = [11, 24];          // (the dark's strength, and what the burning adds; seconds between flashes)
 const WINDS = [-1, -0.6, 0.6, 1];
 const TREE_SAVE = 4;                              // a burning tree put out within this many seconds is as it was; later, half burnt; left to burn 10 s, burnt
 const TOP = 132;                                  // the band of trees along the top: nobody walks above it
@@ -362,7 +364,7 @@ class Chapter1 extends Phaser.Scene {
 
   shadowOf(key, x, y, alpha = PROP_SHADOW) {
     const k = key.replace('bush-burnt', 'bush'), t = `${k}-shade`, [x0, y0] = SHADE[k], [fx, fy] = FOOT[k], src = this.textures.get(t).getSourceImage();
-    return this.add.image(R(x), R(y), t).setOrigin((fx - x0) / src.width, (fy + 0.5 - y0) / src.height).setAlpha(alpha).setDepth(-500);
+    return this.add.image(R(x), R(y), `${t}-deep`).setOrigin((fx - x0) / src.width, (fy + 0.5 - y0) / src.height).setAlpha(alpha).setDepth(-500);
   }
 
   // a picture from a map of characters
@@ -414,7 +416,14 @@ class Chapter1 extends Phaser.Scene {
     this.fire = new Map(); this.ash = new Map(); this.spreadT = 0;          // "col,row" -> { age, life, spr, gnd } / the ash a fire left
     for (const k of ['blue', 'green', 'purple']) { for (const n of ['normal', 'hurt', 'dead']) this.recolour(`fire-${n}`, k); this.recolour('fireball', k); }
 
-    this.oval('shadow-fire', 30, 7, 'rgba(42,26,8,0.18)');          // (a fire makes its own light: only a faint contact shadow)
+    // the props' shadows as they are drawn: each baked one laid on itself SHADOW_MORE times more (its own picture is kept as baked: shadeOn reads it)
+    for (const k of Object.keys(SHADE)) {
+      const src = this.textures.get(`${k}-shade`).getSourceImage(), t = this.textures.createCanvas(`${k}-shade-deep`, src.width, src.height), c = t.getContext(); c.drawImage(src, 0, 0);
+      const d = c.getImageData(0, 0, src.width, src.height), q = d.data;
+      for (let i = 3; i < q.length; i += 4) { const al = q[i] / 255; q[i] = Math.round(255 * (1 - (1 - al) * (1 - SHADOW_MORE * al))); }
+      c.putImageData(d, 0, 0); t.refresh();
+    }
+    this.oval('shadow-fire', 46, 12, `rgba(30,18,6,${FIRE_SHADOW})`);          // (a fire makes its own light: only a contact shadow, a rim of it showing round its foot)
     this.oval('firelight', 120, 40, 'rgba(255,140,60,0.16)'); this.oval('firelight-in', 70, 22, 'rgba(255,170,80,0.16)');
     // the glow behind a fire monster: three hard rings, laid on with ADD
     const gc = this.textures.createCanvas('glow', 96, 96), gx = gc.getContext();
@@ -454,6 +463,7 @@ class Chapter1 extends Phaser.Scene {
     // the girl
     this.girl = { x: W / 2, y: H / 2 + 50, facing: 'south', show: 'south-east', walkT: 0, attack: null, hearts: HEARTS, water: WATER_MAX, hurtT: 0, push: [0, 0] };
     this.girlShadow = this.add.sprite(0, 0, 'sh-carry-south-east', 0).setOrigin(0);
+    this.girlShadow2 = this.add.sprite(0, 0, 'sh-carry-south-east', 0).setOrigin(0).setAlpha(SHADOW_MORE);
     this.girlSpr = this.add.sprite(0, 0, 'carry-south-east', 0).setOrigin(0);
     this.trailSpr = this.add.sprite(0, 0, 'trail-south-east', 0).setOrigin(0).setVisible(false);
 
@@ -1154,7 +1164,7 @@ class Chapter1 extends Phaser.Scene {
       const fl = [1, 1, 0.9, 1.1][Math.floor(m.wobble * 12) % 4];
       m.glow.setPosition(X, R(Y - th * 0.42)).setScale(m.big ? 1.2 : 1).setDepth(m.y - 0.5);
       if (m.crown) m.crown.setPosition(X + (m.flip ? 2 : -2), R(Y - th * sy * 0.62)).setDepth(m.y + 1);          // (sat on the top of the flame)
-      m.shadow.setPosition(X, R(m.y - 2)).setDepth(m.y - 1).setScale(m.hop > 12 ? 0.75 : 1);
+      m.shadow.setPosition(X, R(m.y)).setDepth(m.y - 1).setScale((m.hop > 12 ? 0.75 : 1) * tw / 42);          // (as wide as the fire over it; smaller while it is in the air)
       for (const l of m.light) l.setPosition(X, R(m.y - 4)).setAlpha(fl > 1 ? 1 : 0.85);
     }
   }
@@ -1257,7 +1267,7 @@ class Chapter1 extends Phaser.Scene {
     const sh = [0.05, 0.6, 1.1].map((h) => this.shadeOn(g.x, g.y, h)), tone = (a) => { const v = Math.round((1 - 0.95 * a) * 8) / 8; return Phaser.Display.Color.GetColor(v * 255, v * 255, Math.min(255, v * 270)); };
     const topT = tone((sh[2] + sh[1]) / 2), botT = tone((sh[1] + sh[0]) / 2); spr.setTint(topT, topT, botT, botT); this.trailSpr.setTint(topT, topT, botT, botT);
     spr.setVisible(wince || !(g.hurtT > 0 && Math.floor(g.hurtT * 12) % 2 === 0));          // (hurt: the wince first, then she blinks, on and off)
-    const s = SHADOW[anim]; this.girlShadow.setTexture(`sh-${anim}`, fr).setPosition(left + s[2], top + s[3]).setDepth(g.y - 1);
+    const s = SHADOW[anim]; for (const o of [this.girlShadow, this.girlShadow2]) o.setTexture(`sh-${anim}`, fr).setPosition(left + s[2], top + s[3]).setDepth(-499);          // (on the ground, over the props' shadows and under the props: it does not fall across a bush beside her)
   }
 
   // the rain: one-pixel streaks, slanting two pixels across for every five down

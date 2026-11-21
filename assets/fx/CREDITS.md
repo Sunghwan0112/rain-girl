@@ -11,3 +11,4 @@ From **PVFX Foundry** by Pixel VFX Studio (https://nerijs.itch.io/pvfx-foundry),
 - `potion.png`: ui/mana-pickup
 - `spin.png`: melee/spin-slash
 - `ring.png`: impacts/shockwave-ring
+- `ripple.png`: water/ripple

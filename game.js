@@ -16,7 +16,7 @@ const TREE_DIM = 0.82;          // how bright a green tree is shown, of how it w
 const BUSH_DIM = 0.82;          // the same for a green bush, drawn brighter than the trees; its two brighter sides (0 and 270) are brought down to the other two
 const ROCK_DIM = 0.9;          // and for a rock
 const dimmed = (c, k = 1) => k === 1 ? c : (Math.round((c >> 16 & 255) * k) << 16) | (Math.round((c >> 8 & 255) * k) << 8) | Math.round((c & 255) * k);
-const ASSET_V = 23;
+const ASSET_V = 24;
 // a mushroom's cap: as drawn (red), orange, wine - the reds of the cap only; its pale spots, the stem and the grass as they are
 const CAP_HUES = [null, (r, g, b) => [r, Math.round(g + (r - g) * 0.42), b], (r, g, b) => [Math.round(r * 0.8), Math.round(g * 0.62), Math.round(b + (r - b) * 0.28)]];
 const INK = [0x2b, 0x24, 0x18];
@@ -733,7 +733,7 @@ class Chapter1 extends Phaser.Scene {
       if (fr >= M.hit[0] && fr <= M.hit[1]) this.waterHits(a);
       // THE FINISHER'S OWN SHOW: a water ring swept round her as she turns, and a ring along the ground from her feet - both drawn twice
       // their size, as wide as the backhand reaches (PVFX Foundry, CC0)
-      if (a.move === 'backhand' && fr >= 3 && !a.shown) { a.shown = true; this.fx('spin', g.x, g.y - 26, 0, g.y + 2, a.show.endsWith('west'), 2, g.y - 2); this.fx('ring', g.x, g.y, 0, -498, false, 2); }
+      if (a.move === 'backhand' && fr >= 3 && !a.shown) { a.shown = true; this.fx('spin', g.x, g.y - 26, 0, g.y + 2, a.show.endsWith('west'), 2, g.y - 2); this.fx('ring', g.x, g.y, 0, -498, false, 2); const rx = g.x, ry = g.y; this.time.delayedCall(100, () => this.fx('ripple', rx, ry, 2, -498, false, 2)); }          // (the water's ripple 100 ms after the ring, from its 3rd cell: SpriteCast's water-swing set)
       if (this.swingAsked && M.next && fr >= 1) a.chain = true;          // (pressed again during the cut: the backhand follows it)
       if (fr >= M.frames) {
         g.attack = null;

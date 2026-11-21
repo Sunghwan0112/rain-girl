@@ -15,14 +15,14 @@ Um pequeno jogo de ação em pixel art para jogar no navegador: sem instalar nad
 | | |
 |---|---|
 | **Mover** | setas / WASD |
-| **Balançar o guarda-chuva (jogar água)** | Space / J |
+| **Balançar o guarda-chuva (jogar água)** | Space / J - de novo durante o golpe: um revés giratório |
 | **Trocar o idioma** | L, na tela de título |
 | **Jogar de novo** | R |
 | **No celular ou tablet** | polegar esquerdo: mover · polegar direito: balançar o guarda-chuva · toque para começar (o jogo muda para toque sozinho) |
 
 Monstros de fogo pulam pela floresta. Onde eles caem, a grama pega fogo; o fogo se espalha, o chão em chamas bloqueia o caminho e as árvores queimam. Apague os monstros, e os fogos que eles deixam, antes que a floresta queime.
 
-- **A água acaba.** Cada golpe gasta água; a chuva enche o tanque de novo, três vezes mais rápido se você estiver numa poça.
+- **A água acaba.** Cada golpe gasta água; a chuva enche o tanque de novo, três vezes mais rápido se você estiver numa poça. Uma poção deixada por um fogo aumenta o tanque.
 - **O vento muda a cada rodada.** A chuva se inclina com ele, as árvores se dobram e o fogo se espalha na direção dele.
 - **Salve as árvores.** Uma árvore que pega fogo pode ser salva com água em 4 segundos. Depois disso fica meio queimada; se você deixar, queima inteira.
 - **Leve-os para a água.** Um fogo que cai numa poça chia e perde uma vida: duas ou três quedas apagam um pequeno. Mas ele ferve a poça, que seca mais rápido.
@@ -82,6 +82,7 @@ Sem o ranking online configurado, o jogo guarda um ranking no seu navegador.
 - **Motor**: [Phaser 3](https://phaser.io) (MIT)
 - **Fonte**: [Galmuri11](https://github.com/quiple/galmuri) de Lee Minseo (SIL OFL 1.1, `assets/font/OFL.md`)
 - **Arte**: feita com o [SpriteCast](https://github.com/Sunghwan0112/spritecast), modelos 3D da Tripo e modelos de imagem do GPT
+- **Efeitos**: acertos, fogos apagados, bolas de fogo, itens e os anéis do revés são do [PVFX Foundry](https://nerijs.itch.io/pvfx-foundry) da Pixel VFX Studio (CC0 1.0) - [`assets/fx/CREDITS.md`](assets/fx/CREDITS.md) · [`assets/items/CREDITS.md`](assets/items/CREDITS.md).
 - **Som**: sons CC0 de [Kenney](https://kenney.nl) e OpenGameArt, alguns feitos em código; música feita com Suno: veja [`assets/audio/CREDITS.md`](assets/audio/CREDITS.md)
 
 ## Licença

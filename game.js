@@ -16,7 +16,7 @@ const TREE_DIM = 0.82;          // how bright a green tree is shown, of how it w
 const BUSH_DIM = 0.82;          // the same for a green bush, drawn brighter than the trees; its two brighter sides (0 and 270) are brought down to the other two
 const ROCK_DIM = 0.9;          // and for a rock
 const dimmed = (c, k = 1) => k === 1 ? c : (Math.round((c >> 16 & 255) * k) << 16) | (Math.round((c >> 8 & 255) * k) << 8) | Math.round((c & 255) * k);
-const ASSET_V = 9;
+const ASSET_V = 19;
 // a mushroom's cap: as drawn (red), orange, wine - the reds of the cap only; its pale spots, the stem and the grass as they are
 const CAP_HUES = [null, (r, g, b) => [r, Math.round(g + (r - g) * 0.42), b], (r, g, b) => [Math.round(r * 0.8), Math.round(g * 0.62), Math.round(b + (r - b) * 0.28)]];
 const INK = [0x2b, 0x24, 0x18];
@@ -46,7 +46,16 @@ const DIAG = ['south-east', 'south-west', 'north-east', 'north-west'];          
 const PX = { w: PIXEL.frame[0], h: PIXEL.frame[1], ax: PIXEL.feet[0], ay: PIXEL.feet[1] };
 const GIRL = { walk: { frames: 8, fps: 11 }, slash: { frames: 8, fps: 15 }, stand: { frames: 3, fps: 0.75 } };          // (standing: 3 frames over 4 s, a breath and a sway)
 const SHADOW = PIXEL.shadows;
-const TRAIL = Object.fromEntries(DIAG.map((f) => [f, PIXEL.trails[`slash-${f}`]]));
+// THE COMBO: a downward cut, and pressed again before it ends, a spinning backhand - their own set (assets/girlpx/attack.js, ATTACK: drawn
+// from Mixamo moves on a bigger canvas, so its own frame size and feet). Each has its own reach: the cut is long and narrow, ahead of her;
+// the backhand turns her round, short, all the way round. `hit`: the frames whose water lands.
+const AX = { w: ATTACK.frame[0], h: ATTACK.frame[1], ax: ATTACK.feet[0], ay: ATTACK.feet[1] };
+const MOVES = {
+  downward: { frames: 8, fps: 15, hit: [3, 5], reach: 155, half: Phaser.Math.DegToRad(42), next: 'backhand' },
+  backhand: { frames: 8, fps: 15, hit: [3, 6], reach: 118, half: Math.PI, next: null },
+};
+const TRAIL = Object.fromEntries(Object.keys(MOVES).flatMap((m) => DIAG.map((f) => [`${m}-${f}`, ATTACK.trails[`${m}-${f}`]])));
+Object.assign(PIXEL.shadows, ATTACK.shadows);
 const SPEED = 145;          // (a little faster since the ground went isometric: up and down is half as fast on the screen)
 const REACH = 130, HALF_ANGLE = Phaser.Math.DegToRad(68);
 // THE FIRES: four colours, each its own trouble. hp: the water it takes; spread: how fast its fire on the ground spreads; hits: the
@@ -78,8 +87,9 @@ const flameKey = (i, kind, size = '') => (kind === 'red' ? `flame-${i}` : `flame
 // THE GROUND BURNS: a grid of 16 px squares. Where a fire monster lands and where a fireball falls the grass catches; a fire spreads to
 // the squares beside it now and then, burns ~18 s and leaves scorched ground. The girl cannot walk into a burning square (her water puts
 // it out); caught in one - it catches under her - she is hurt and thrown clear.
-// her: five hearts; a water tank the swing draws on (the rain fills it again); a monster put out may leave a drop that heals
-const HEARTS = 5, WATER_MAX = 100, SWING_COST = 18, WATER_REGEN = 15, DROP_CHANCE = 0.3;
+// her: five hearts; a water tank the swing draws on (the rain fills it again); a monster put out may leave a heart (a life back), or a
+// potion that makes the tank bigger (WATER_GROW a potion, up to WATER_CAP: the game it lasts)
+const HEARTS = 5, WATER_MAX = 200, WATER_GROW = 25, WATER_CAP = 300, SWING_COST = 18, WATER_REGEN = 15, DROP_CHANCE = 0.5, POTION_SHARE = 0.4;          // (a drop or, POTION_SHARE of the time while the tank can grow, a potion)
 // PUDDLES: two or three each round, somewhere new - fire does not catch on them, a fireball dies in them, and standing in one fills
 // the tank three times as fast. They dry up from the edge: gone ~35 s into the round.
 const PUDDLES = [2, 3], PUDDLE_LIFE = 35, PUDDLE_DRY = 22, PUDDLE_FILL = 3, PUDDLE_BOIL = 4;          // (BOIL: the seconds of its life a fire landing in it boils away)
@@ -132,6 +142,10 @@ const PIX = {
   // where the water strikes: a four-pointed burst, white at the heart
   splat: { map: ['....b....', '....b....', '...bWb...', '.b.WWW.b.', 'bbWWWWWbb', '.b.WWW.b.', '...bWb...', '....b....', '....b....'], col: { b: '#9fd4f8', W: '#ffffff' } },
   bigdrop: { map: ['...k...', '..kbk..', '.kbbbk.', 'kbWbbbk', 'kbWbbbk', 'kbbbbbk', '.kbbbk.', '..kkk..'], col: { k: '#1d3a5c', b: '#5fb0ee', W: '#e8f6ff' } },
+  // a potion: a round flask of violet, a gold cap - nothing like the blue drop beside it - and a star that twinkles by it
+  potion: { map: ['....ooo....', '...ooOoo...', '....kgk....', '....kgk....', '...kgggk...', '..kWtttTk..', '.kWttttttk.', 'kWtttttttdk', 'kWttTttttdk', 'kttttttttdk', 'kttttttttdk', '.kttttttdk.', '..kdddddk..', '...kkkkk...'],
+            col: { o: '#e8b23a', O: '#fff1a8', k: '#3a1d4a', g: '#e8f4ff', W: '#ffffff', t: '#c75bd8', T: '#f6c8ff', d: '#8a2fa0' } },
+  twinkle: { map: ['..w..', '..w..', 'wwWww', '..w..', '..w..'], col: { w: '#fff1a8', W: '#ffffff' } },
 };
 
 // the drawn facing for a direction: a diagonal as it is; straight across or up and down, the nearest diagonal - the one shown
@@ -172,11 +186,18 @@ class Chapter1 extends Phaser.Scene {
     // a browser keeps pictures and sounds it has fetched; a changed one is fetched again only under a new address - ASSET_V, to raise
     // whenever a file in assets/ changes
     this.load.on('addfile', (key, type, loader, file) => { if (typeof file.url === 'string' && !file.url.includes('?') && !file.url.startsWith('data:')) file.url += `?v=${ASSET_V}`; });
-    for (const f of DIAG) for (const a of ['carry', 'slash', 'stand']) {
+    for (const f of DIAG) for (const a of ['carry', 'stand']) {          // (the swing: the combo's own set, below)
       this.load.spritesheet(`${a}-${f}`, `assets/girlpx/${a}-${f}.png`, { frameWidth: PX.w, frameHeight: PX.h });
       const s = SHADOW[`${a}-${f}`]; this.load.spritesheet(`sh-${a}-${f}`, `assets/girlpx/shadows/${a}-${f}.png`, { frameWidth: s[0], frameHeight: s[1] });
     }
-    for (const f of DIAG) this.load.spritesheet(`trail-${f}`, `assets/girlpx/trails/slash-${f}.png`, { frameWidth: TRAIL[f].w, frameHeight: TRAIL[f].h });
+    this.load.image('item-heart', 'assets/items/heart.png'); this.load.image('item-potion', 'assets/items/potion.png'); this.load.image('tank-full', 'assets/items/tank-full.png'); this.load.image('tank-empty', 'assets/items/tank-empty.png');          // (assets/items/CREDITS.md)
+    for (const [k, e] of Object.entries(FX)) this.load.spritesheet(`fx-${k}`, `assets/fx/${k}.png`, { frameWidth: e.w, frameHeight: e.h });          // (PVFX Foundry, CC0)
+    for (const m of Object.keys(MOVES)) for (const f of DIAG) {
+      const n = `${m}-${f}`, s = ATTACK.shadows[n];
+      this.load.spritesheet(n, `assets/girlpx/attack/${n}.png`, { frameWidth: AX.w, frameHeight: AX.h });
+      this.load.spritesheet(`sh-${n}`, `assets/girlpx/attack/shadows/${n}.png`, { frameWidth: s[0], frameHeight: s[1] });
+      this.load.spritesheet(`trail-${n}`, `assets/girlpx/attack/trails/${n}.png`, { frameWidth: TRAIL[n].w, frameHeight: TRAIL[n].h });
+    }
     // the music (Suno) and the sounds (assets/audio/CREDITS.md)
     for (const n of ['hit_wet_0', 'hit_wet_1', 'douse_out', 'thunder_0', 'thunder_1', 'step_puddle_0', 'step_puddle_1', ...[0, 1, 2, 3, 4].flatMap((i) => [`step_grass_${i}`, `step_dirt_${i}`])]) this.load.audio(n, [`assets/audio/${n}.m4a`, `assets/audio/${n}.ogg`]);          // (m4a plays everywhere, an iPhone too; ogg for a browser without it)
     for (const n of ['bgm_stage', 'bgm_boss', 'bgm_title', 'fire_loop', 'rain_loop', 'spray_0', 'spray_1', 'jingle_clear', 'jingle_win', 'jingle_over', 'jingle_boss_in', 'hr_steam_0', 'poof_0',
@@ -385,7 +406,10 @@ class Chapter1 extends Phaser.Scene {
         else if (kind === 'purple') { d.data[i] = Math.round(r * 0.85); d.data[i + 1] = b; d.data[i + 2] = Math.min(255, Math.round(r * 0.95)); }
       }
     }
-    c.putImageData(d, 0, 0); t.refresh();
+    c.putImageData(d, 0, 0);
+    const from = this.textures.get(key);          // (a sprite sheet keeps its frames in the copy: the fireball's flight)
+    for (const n of from.getFrameNames()) { const f = from.get(n); t.add(n, 0, f.cutX, f.cutY, f.cutWidth, f.cutHeight); }
+    t.refresh();
   }
 
   // a smaller copy of a pixel picture: each new pixel one of the old (nearest), so it stays pixel art - for flames young or dying
@@ -414,7 +438,7 @@ class Chapter1 extends Phaser.Scene {
     this.groundTiles();
     this.puddles = []; this.wet = new Map();          // "col,row" -> the puddle's square
     this.fire = new Map(); this.ash = new Map(); this.spreadT = 0;          // "col,row" -> { age, life, spr, gnd } / the ash a fire left
-    for (const k of ['blue', 'green', 'purple']) { for (const n of ['normal', 'hurt', 'dead']) this.recolour(`fire-${n}`, k); this.recolour('fireball', k); }
+    for (const k of ['blue', 'green', 'purple']) { for (const n of ['normal', 'hurt', 'dead']) this.recolour(`fire-${n}`, k); this.recolour('fireball', k); this.recolour('fx-fireflight', k); }
 
     // the props' shadows as they are drawn: each baked one laid on itself SHADOW_MORE times more (its own picture is kept as baked: shadeOn reads it)
     for (const k of Object.keys(SHADE)) {
@@ -423,7 +447,8 @@ class Chapter1 extends Phaser.Scene {
       for (let i = 3; i < q.length; i += 4) { const al = q[i] / 255; q[i] = Math.round(255 * (1 - (1 - al) * (1 - SHADOW_MORE * al))); }
       c.putImageData(d, 0, 0); t.refresh();
     }
-    this.oval('shadow-fire', 46, 12, `rgba(30,18,6,${FIRE_SHADOW})`);          // (a fire makes its own light: only a contact shadow, a rim of it showing round its foot)
+    this.oval('shadow-fire', 46, 12, `rgba(30,18,6,${FIRE_SHADOW})`);
+    this.oval('shadow-item', 22, 7, 'rgba(30,18,6,0.5)');          // (an item's: just round, on the ground under it as it bobs)          // (a fire makes its own light: only a contact shadow, a rim of it showing round its foot)
     this.oval('firelight', 120, 40, 'rgba(255,140,60,0.16)'); this.oval('firelight-in', 70, 22, 'rgba(255,170,80,0.16)');
     // the glow behind a fire monster: three hard rings, laid on with ADD
     const gc = this.textures.createCanvas('glow', 96, 96), gx = gc.getContext();
@@ -461,11 +486,11 @@ class Chapter1 extends Phaser.Scene {
     this.ripples = []; this.pmask = {}; this.rippleG = this.add.graphics().setDepth(-940);
 
     // the girl
-    this.girl = { x: W / 2, y: H / 2 + 50, facing: 'south', show: 'south-east', walkT: 0, attack: null, hearts: HEARTS, water: WATER_MAX, hurtT: 0, push: [0, 0] };
+    this.girl = { x: W / 2, y: H / 2 + 50, facing: 'south', show: 'south-east', walkT: 0, attack: null, hearts: HEARTS, water: WATER_MAX, waterMax: WATER_MAX, hurtT: 0, push: [0, 0] };
     this.girlShadow = this.add.sprite(0, 0, 'sh-carry-south-east', 0).setOrigin(0);
     this.girlShadow2 = this.add.sprite(0, 0, 'sh-carry-south-east', 0).setOrigin(0).setAlpha(SHADOW_MORE);
     this.girlSpr = this.add.sprite(0, 0, 'carry-south-east', 0).setOrigin(0);
-    this.trailSpr = this.add.sprite(0, 0, 'trail-south-east', 0).setOrigin(0).setVisible(false);
+    this.trailSpr = this.add.sprite(0, 0, 'trail-downward-south-east', 0).setOrigin(0).setVisible(false);
 
     this.monsters = []; this.shots = [];
     this.wave = -1; this.state = 'title';
@@ -502,8 +527,17 @@ class Chapter1 extends Phaser.Scene {
 
     // letters: the pixel font at its own size (11 px) or twice or three times that - never between
     const txt = (x, y, size, col = '#fff8e8') => ptext(this, x, y, '', size, col);
-    this.hearts = Array.from({ length: HEARTS }, (_, i) => this.add.image(10 + i * 24, 8, 'heart').setOrigin(0).setScale(2).setDepth(6000));
-    this.add.image(10, 34, 'bigdrop').setOrigin(0).setDepth(6000);
+    // her hearts: the glossy heart she picks up (CC0, assets/items/CREDITS.md); a lost one the same heart, dark and grey
+    { const src = this.textures.get('item-heart').getSourceImage(), t = this.textures.createCanvas('item-heart-empty', src.width, src.height), c = t.getContext();
+      c.drawImage(src, 0, 0); const d = c.getImageData(0, 0, src.width, src.height);
+      for (let i = 0; i < d.data.length; i += 4) { const v = Math.round((0.3 * d.data[i] + 0.59 * d.data[i + 1] + 0.11 * d.data[i + 2]) * 0.55); d.data[i] = v + 8; d.data[i + 1] = v + 2; d.data[i + 2] = v; }
+      c.putImageData(d, 0, 0); t.refresh(); }
+    this.hearts = Array.from({ length: HEARTS }, (_, i) => this.add.image(8 + i * 32, 5, 'item-heart').setOrigin(0).setDepth(6000));
+    // THE WATER TANK: a glass bar (CC0, assets/items/CREDITS.md), its ends kept and its middle stretched as the tank grows (a nine-slice);
+    // the water in it the full bar, shown up to how much there is
+    this.tankE = this.add.nineslice(8, 36, 'tank-empty', null, 140, 21, 10, 10, 0, 0).setOrigin(0).setDepth(6000);
+    this.tankF = this.add.nineslice(8, 36, 'tank-full', null, 140, 21, 10, 10, 0, 0).setOrigin(0).setDepth(6001);
+    this.tankM = this.make.graphics({ add: false }); this.tankF.setMask(this.tankM.createGeometryMask());
     this.bars = this.add.graphics().setDepth(6000);
     this.scoreText = txt(W - 12, 26, 11, '#ffe6b0').setOrigin(1, 0).setDepth(6000);
     this.bossText = txt(W / 2, 8, 11, '#bfe8ff').setOrigin(0.5, 0).setDepth(6000);
@@ -620,7 +654,7 @@ class Chapter1 extends Phaser.Scene {
     for (const a of this.ash.values()) a.destroy(); this.ash.clear(); for (const sc of this.scorches || []) sc.destroy(); this.scorches = [];
     this.clearPuddles();
     for (const tr of this.trees) { for (const fl of tr.flames || []) fl.destroy(); tr.flames = null; if (tr.glowG) { tr.glowG.destroy(); tr.glowG = null; } tr.state = tr.kind === 'tree-burnt' ? 'burnt' : 'green'; tr.burnT = 0; tr.saveT = 0; tr.img.clearTint(); this.setProp(tr.img, `${tr.kind}-${tr.v}`); tr.shadow.destroy(); tr.shadow = this.shadowOf(`${tr.kind}-${tr.v}`, tr.x, tr.y); }
-    Object.assign(this.girl, { x: W / 2, y: H / 2 + 50, facing: 'south', show: 'south-east', attack: null, hearts: HEARTS, water: WATER_MAX, hurtT: 0, push: [0, 0] });
+    Object.assign(this.girl, { x: W / 2, y: H / 2 + 50, facing: 'south', show: 'south-east', attack: null, hearts: HEARTS, water: WATER_MAX, waterMax: WATER_MAX, hurtT: 0, push: [0, 0] });
     for (const it of this.items) it.spr.destroy(); this.items = []; this.total = 0; this.starsTotal = 0; this.burntSum = 0;
     this.swingAsked = false;
     this.state = 'play'; this.wave = -1; this.toSpawn = 0; this.waiting = false; this.hideTitle(); this.playMusic('bgm_stage'); this.nextWave();
@@ -694,15 +728,22 @@ class Chapter1 extends Phaser.Scene {
 
     // the swing
     if (g.attack) {
-      g.attack.t += dt;
-      const fr = Math.floor(g.attack.t * GIRL.slash.fps);
-      if (fr >= 2 && fr <= 5) this.waterHits(g.attack);
-      if (fr >= GIRL.slash.frames) g.attack = null;
+      const a = g.attack, M = MOVES[a.move]; a.t += dt;
+      const fr = Math.floor(a.t * M.fps);
+      if (fr >= M.hit[0] && fr <= M.hit[1]) this.waterHits(a);
+      // THE FINISHER'S OWN SHOW: a water ring swept round her as she turns, and a ring along the ground from her feet - both drawn twice
+      // their size, as wide as the backhand reaches (PVFX Foundry, CC0)
+      if (a.move === 'backhand' && fr >= 3 && !a.shown) { a.shown = true; this.fx('spin', g.x, g.y - 26, 0, g.y + 2, a.show.endsWith('west'), 2, g.y - 2); this.fx('ring', g.x, g.y, 0, -498, false, 2); }
+      if (this.swingAsked && M.next && fr >= 1) a.chain = true;          // (pressed again during the cut: the backhand follows it)
+      if (fr >= M.frames) {
+        g.attack = null;
+        if (a.chain && g.water >= SWING_COST) this.swing(M.next, time + 1);
+      }
     } else if (this.swingAsked) {
-      if (g.water >= SWING_COST) { g.water -= SWING_COST; g.attack = { t: 0, id: time, facing: g.facing, show: g.show }; this.time.delayedCall(110, () => this.sfx(['spray_0', 'spray_1'], 0.55)); }
+      if (g.water >= SWING_COST) this.swing('downward', time);
       else if (!this.dryT || time - this.dryT > 900) { this.dryT = time; this.puff(g.x + 10, g.y - 50, 2); this.say(T('noWater')); this.sfx('error_0', 0.4); }          // (the tank is empty: a puff of nothing)
     }
-    if (!g.attack) g.water = Math.min(WATER_MAX, g.water + WATER_REGEN * dt * (this.wetAt(g.x, g.y) ? PUDDLE_FILL : 1));          // (the rain fills it again; a puddle three times as fast)
+    if (!g.attack) g.water = Math.min(g.waterMax, g.water + WATER_REGEN * dt * (this.wetAt(g.x, g.y) ? PUDDLE_FILL : 1));          // (the rain fills it again; a puddle three times as fast)
     this.updatePuddles(dt);
     this.swingAsked = false;
 
@@ -755,13 +796,23 @@ class Chapter1 extends Phaser.Scene {
   }
 
   // A DROP that heals: left now and then by a monster put out (always by the boss); a heart back and the tank a little fuller
-  dropItem(x, y) { this.items.push({ x, y, age: 0, spr: this.add.image(R(x), R(y), 'bigdrop').setOrigin(0.5, 1).setScale(2).setDepth(y) }); }
+  dropItem(x, y, kind = 'drop') {
+    const it = { x, y, kind, age: 0, spr: this.add.image(R(x), R(y), kind === 'potion' ? 'item-potion' : 'item-heart').setOrigin(0.5, 1).setDepth(y) };          // (32 px, pixel for pixel: a heart drawn for the game; a potion, CC0 - assets/items/CREDITS.md)
+    if (kind === 'potion') it.tw = this.add.image(0, 0, 'twinkle').setOrigin(0.5).setScale(2).setDepth(y + 1);          // (its star)
+    it.sh = this.add.image(R(x), R(y), 'shadow-item').setOrigin(0.5, 0.5).setDepth(-499);
+    this.items.push(it);
+  }
   updateItems(dt) {
     const g = this.girl;
     for (const it of this.items) {
       it.age += dt; it.spr.setY(R(it.y - 2 - (Math.floor(it.age * 4) % 2) * 2)).setVisible(it.age < 7 || Math.floor(it.age * 8) % 2 === 0);
-      if (wdist(it.x - g.x, it.y - g.y) < 26) { g.hearts = Math.min(HEARTS, g.hearts + 1); g.water = Math.min(WATER_MAX, g.water + 40); this.puff(it.x, it.y - 10, 4); it.age = 99; this.sfx('coin_0', 0.6); }
-      if (it.age > 9) it.spr.destroy();
+      if (it.tw) { const on = Math.floor(it.age * 5) % 3 === 0; it.tw.setPosition(R(it.x + 12), R(it.y - 30 - (Math.floor(it.age * 4) % 2) * 2)).setVisible(on && it.spr.visible); }          // (a twinkle, a beat in three)
+      if (wdist(it.x - g.x, it.y - g.y) < 26) {
+        if (it.kind === 'potion') { const grow = Math.min(WATER_GROW, WATER_CAP - g.waterMax); g.waterMax += grow; g.water = Math.min(g.waterMax, g.water + 60 + grow); if (grow > 0) this.say(T('tankBigger')); }          // (a potion: the tank bigger, and fuller)
+        else { g.hearts = Math.min(HEARTS, g.hearts + 1); g.water = Math.min(g.waterMax, g.water + 40); }          // (a heart: a life back, and some water)
+        this.fx(it.kind === 'potion' ? 'potion' : 'heart', it.x, it.y - 8); it.age = 99; this.sfx('coin_0', 0.6); }
+      it.sh.setVisible(it.spr.visible);
+      if (it.age > 9) { it.spr.destroy(); it.sh.destroy(); if (it.tw) it.tw.destroy(); }
     }
     this.items = this.items.filter((it) => it.age <= 9);
   }
@@ -852,7 +903,7 @@ class Chapter1 extends Phaser.Scene {
   douseGround(x, y, id) {          // one hit a swing: a blue fire takes three
     const k = this.cell(x, y).join(','), f = this.fire.get(k); if (!f || f.hitBy === id) return false;
     f.hitBy = id; if (--f.hits > 0) { f.spr.setTintFill(0xffffff); this.time.delayedCall(70, () => f.spr.active && f.spr.clearTint()); return false; }
-    this.toAsh(k, f); if (Math.random() < 0.4) { const [px, py] = this.centre(f.c, f.r); this.puff(px, py - 4, 1); }
+    this.toAsh(k, f); { const [px, py] = this.centre(f.c, f.r); this.fx('drip', px, py + 6, 0, py); if (Math.random() < 0.4) this.puff(px, py - 4, 1); }
     if (!this.hissT || this.time.now - this.hissT > 250) { this.hissT = this.time.now; this.sfx('hr_steam_0', 0.25, x); } return true;
   }
   // which square a fire spreads to: any of the four beside it, those the wind blows toward up to 2.5 times as likely
@@ -1027,16 +1078,24 @@ class Chapter1 extends Phaser.Scene {
   keepOut(o) { o.x = Phaser.Math.Clamp(o.x, 30, W - 30); o.y = Phaser.Math.Clamp(o.y, TOP, H - 12); }          // (on the screen; the trunks and rocks: the marked squares, in each step)
 
   // the water: a fan in front of her, from the 3rd to the 6th frame of the swing; one hit per monster per swing
+  swing(move, id) {          // a move of the combo begins: the water it costs, the spray's sound
+    const g = this.girl; g.water -= SWING_COST; g.attack = { move, t: 0, id, facing: g.facing, show: g.show };
+    this.time.delayedCall(move === 'backhand' ? 150 : 110, () => this.sfx(['spray_0', 'spray_1'], 0.55));
+  }
   waterHits(a) {
-    const g = this.girl, [fx, fy] = vecOf(a.facing), cy = g.y - 20;
+    const g = this.girl, [fx, fy] = vecOf(a.facing), cy = g.y - 20, M = MOVES[a.move] || MOVES.downward, REACH = M.reach;
     const inFan = (x, y) => {          // (in world terms: a pixel up or down counts twice)
       const dx = x - g.x, dy = (y - cy) * 2, d = Math.hypot(dx, dy);
       if (d > REACH + 24) return false;
-      return d < 26 || Math.acos(Phaser.Math.Clamp((dx * fx + dy * fy) / d, -1, 1)) < HALF_ANGLE;
+      return d < 26 || M.half >= Math.PI || Math.acos(Phaser.Math.Clamp((dx * fx + dy * fy) / d, -1, 1)) < M.half;
     };
     for (const m of this.monsters) {
       if (m.dead || m.hitBy === a.id) continue;
-      if (inFan(m.x, m.y - 28) || inFan(m.x, m.y - 6)) { m.hitBy = a.id; this.douse(m, fx, fy / 2); }
+      if (inFan(m.x, m.y - 28) || inFan(m.x, m.y - 6)) {
+        m.hitBy = a.id; let [kx, ky] = [fx, fy];
+        if (M.half >= Math.PI) { const ddx = m.x - g.x, ddy = (m.y - g.y) * 2, dd = Math.hypot(ddx, ddy) || 1; kx = ddx / dd; ky = ddy / dd; }          // (the backhand, all round: thrown away from her)
+        this.douse(m, kx, ky / 2);
+      }
     }
     for (const s of this.shots) if (!s.dead && inFan(s.x, s.y)) { s.dead = true; this.puff(s.x, s.y, 3); s.obj.destroy(); }
     for (const tr of this.trees) if (tr.state === 'burning' && wdist(tr.x - g.x, tr.y - g.y) < REACH + 40 && (inFan(tr.x, tr.y - 10) || inFan(tr.x, tr.y - (tr.solid ? 40 : 20)))) this.burnOut(tr);
@@ -1051,7 +1110,8 @@ class Chapter1 extends Phaser.Scene {
     this.sfx('hr_steam_0', 0.35, m.x); this.sfx(['hit_soft_0', 'hit_soft_1'], 0.35, m.x);
     this.sfx(out ? 'douse_out' : ['hit_wet_0', 'hit_wet_1'], out ? 0.8 : 0.65, m.x, 170);
     if (!soft) { if (!window.BOT) this.stopT = Math.max(this.stopT || 0, out ? (m.big ? 0.25 : 0.11) : (m.big ? 0.08 : 0.06)); this.cameras.main.shake(out ? 140 : 90, (out ? 0.005 : 0.0025) * big); }
-    this.splat(m.x - fx * 10, m.y - 30 - fy * 10, out);
+    this.splat(m.x - fx * 10, m.y - 30 - fy * 10, out); this.fx('hit', m.x - fx * 6, m.y - 22 - fy * 6);
+    if (out) this.fx('out', m.x, m.y - 14, 0, m.y + 1);
     m.hurtT = 0.35; m.kb = [fx * 420 * m.K.kb, fy * 420 * m.K.kb]; m.flashT = 0.09; m.pulse = 0.28;
     this.puff(m.x, m.y - 32, out ? 4 : 6); this.drops(m.x, m.y - 32, fx, fy, out ? 16 : 10);
     if (out) {
@@ -1060,7 +1120,9 @@ class Chapter1 extends Phaser.Scene {
       this.puff(m.x, m.y - 32, 12);
       this.monsters = this.monsters.filter(o => o !== m);
       if (this.round) this.round.kills++;
-      if (m.big || Math.random() < DROP_CHANCE) this.time.delayedCall(600, () => this.dropItem(m.x, m.y));
+      const potion = () => this.girl.waterMax < WATER_CAP && Math.random() < POTION_SHARE;
+      if (m.big) this.time.delayedCall(600, () => { this.dropItem(m.x - 14, m.y, 'drop'); if (this.girl.waterMax < WATER_CAP) this.dropItem(m.x + 14, m.y, 'potion'); });          // (the boss: a drop and a potion)
+      else if (Math.random() < DROP_CHANCE) this.time.delayedCall(600, () => this.dropItem(m.x, m.y, potion() ? 'potion' : 'drop'));
       if (m.crown) m.crown.destroy();
       m.spr.setTexture('fire-dead' + m.sfx).setScale(1).setY(m.y).setTintFill(0xffffff);
       this.time.delayedCall(80, () => m.spr.clearTint());
@@ -1108,6 +1170,16 @@ class Chapter1 extends Phaser.Scene {
   }
 
   // the burst where the water struck: two steps, whole pixels (1x, then 2x), then gone
+  // AN EFFECT from PVFX Foundry (CC0): played once where it happens, on its own pivot, at its own pace, then gone. `from`: the frame to
+  // start at (a fireball's impact sheet flies in first - here only its burst)
+  fx(k, x, y, from = 0, depth = 4003, flip = false, scale = 1, back = null) {          // (flip: drawn going right - mirrored for a blow to the left; scale: whole times, so it stays pixel art)
+    // back: a RING round her is cut at its middle line - the far half drawn at `back` (behind her), the near half at `depth` (in front):
+    // drawn whole in front of her, the ring went through her body
+    const e = FX[k]; if (!e) return;
+    const make = (d) => this.add.sprite(R(x), R(y), `fx-${k}`, from).setOrigin(e.px / e.w, e.py / e.h).setDepth(d).setFlipX(flip).setScale(scale);
+    const ss = back === null ? [make(depth)] : [make(back).setCrop(0, 0, e.w, e.py), make(depth).setCrop(0, e.py, e.w, e.h - e.py)]; let f = from;
+    const tick = this.time.addEvent({ delay: e.ms, repeat: e.n - from - 1, callback: () => { f++; if (f >= e.n) { ss.forEach((s) => s.destroy()); tick.remove(); } else ss.forEach((s) => s.setFrame(f)); } });
+  }
   splat(x, y, big) {
     const c = this.add.image(R(x), R(y), 'splat').setDepth(4002).setScale(big ? 2 : 1);
     this.time.delayedCall(50, () => c.setScale(big ? 3 : 2).setAlpha(0.7));
@@ -1174,8 +1246,8 @@ class Chapter1 extends Phaser.Scene {
     const dx = g.x - sx, dy = (g.y - 34) - sy, d = Math.hypot(dx, dy) || 1, v = 170, n = m.K.shots; this.sfx('shot_fire_0', 0.3, sx);
     for (let i = 0; i < n; i++) {
       const a = Math.atan2(dy, dx) + (i - (n - 1) / 2) * 0.32;          // (three: a fan)
-      const obj = this.add.image(R(sx), R(sy), 'fireball' + m.sfx).setScale(2).setDepth(3000);
-      this.shots.push({ x: sx, y: sy, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: Math.min(3.2, (d + 30) / v), obj, dead: false, kind: m.kind });
+      const F_ = FX.fireflight, obj = this.add.sprite(R(sx), R(sy), 'fx-fireflight' + m.sfx, 0).setOrigin(F_.px / F_.w, F_.py / F_.h).setRotation(a).setDepth(3000);          // (PVFX Foundry's fireball, turned the way it flies)
+      this.shots.push({ x: sx, y: sy, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: Math.min(3.2, (d + 30) / v), obj, dead: false, kind: m.kind, t: 0 });
     }          // (it falls a little past where she was aimed at: and sets fire there)
   }
 
@@ -1186,12 +1258,12 @@ class Chapter1 extends Phaser.Scene {
       s.x += s.vx * dt; s.y += s.vy * dt; s.life -= dt;
       // it flies ~35 px off the ground: drawn in front of what stands behind its spot on the ground, behind what stands in front
       const gy = s.y + SHOT_UP;
-      s.obj.setPosition(R(s.x), R(s.y)).setFlip(Math.floor(s.life * 16) % 2 === 0, Math.floor(s.life * 12) % 2 === 0).setDepth(gy + 0.5);          // (it flickers by flipping, not by growing)
+      s.t += dt; s.obj.setPosition(R(s.x), R(s.y)).setFrame(Math.floor(s.t * 1000 / FX.fireflight.ms) % FX.fireflight.n).setDepth(gy + 0.5);          // (its flight's own frames)
       // COVER: whatever of a prop stands at the fireball's height (its 3D model, cut there: a trunk, a rock, a bush - not a crown,
       // not a mushroom) stops it - sparks; a green or half-burnt tree or bush it strikes may catch
       const wall = this.struck(s.x, gy);
       if (wall) {
-        s.dead = true; s.obj.destroy(); this.sparks(s.x, s.y); this.sfx(['hit_soft_0', 'hit_soft_1'], 0.3, s.x);
+        s.dead = true; s.obj.destroy(); this.sparks(s.x, s.y); this.fx('spark', s.x, s.y + 20, 3, gy + 1); this.sfx(['hit_soft_0', 'hit_soft_1'], 0.3, s.x);
         if ((wall.state === 'green' || wall.state === 'half') && Math.random() < 0.35) this.lightTree(wall);
         continue;
       }
@@ -1248,11 +1320,12 @@ class Chapter1 extends Phaser.Scene {
 
   drawGirl() {
     const g = this.girl, spr = this.girlSpr, X = R(g.x), Y = R(g.y);
-    const left = X - PX.ax, top = Y - PX.ay; let anim, fr;
+    let left = X - PX.ax, top = Y - PX.ay, anim, fr;
     if (g.attack) {
-      const f = g.attack.show; anim = `slash-${f}`; fr = Math.min(GIRL.slash.frames - 1, Math.floor(g.attack.t * GIRL.slash.fps));
-      const tr = TRAIL[f], cell = Math.min(tr.cells - 1, Math.floor(g.attack.t * GIRL.slash.fps * tr.per));
-      this.trailSpr.setTexture(`trail-${f}`, cell).setPosition(left + tr.x, top + tr.y).setVisible(true).setDepth(g.y + 1);          // (the water's own render in each facing)
+      const f = g.attack.show, M = MOVES[g.attack.move]; anim = `${g.attack.move}-${f}`; fr = Math.min(M.frames - 1, Math.floor(g.attack.t * M.fps));
+      left = X - AX.ax; top = Y - AX.ay;          // (the attack set's own frame and feet)
+      const tr = TRAIL[anim], cell = Math.min(tr.cells - 1, Math.floor(g.attack.t * M.fps * tr.per));
+      this.trailSpr.setTexture(`trail-${anim}`, cell).setPosition(left + tr.x, top + tr.y).setVisible(true).setDepth(g.y + 1);          // (the water's own render in each facing)
     } else {
       this.trailSpr.setVisible(false);
       if (g.hurtT > 0.85) { anim = `stand-${g.show}`; fr = 0; }          // (just hit: a wince - drawn below with the hurt face)
@@ -1289,12 +1362,12 @@ class Chapter1 extends Phaser.Scene {
 
   drawUi() {
     const g = this.girl, b = this.bars; b.clear();
-    this.hearts.forEach((h, i) => h.setTexture(i < g.hearts ? 'heart' : 'heartEmpty'));
+    this.hearts.forEach((h, i) => h.setTexture(i < g.hearts ? 'item-heart' : 'item-heart-empty'));
     // the water tank: a bar in whole pixels beside a drop
-    const w = 100, fill = Math.round(w * (g.water ?? WATER_MAX) / WATER_MAX), low = (g.water ?? WATER_MAX) < SWING_COST;
-    b.fillStyle(0x2b2418, 1).fillRect(20, 36, w + 4, 8); b.fillStyle(0x1d3a5c, 1).fillRect(22, 38, w, 4);
-    b.fillStyle(low ? 0xe8485a : 0x5fb0ee, 1).fillRect(22, 38, fill, 4); b.fillStyle(0xd8f0ff, 1).fillRect(22, 38, fill, 1);
-    for (let x = SWING_COST; x < WATER_MAX; x += SWING_COST) b.fillStyle(0x2b2418, 1).fillRect(22 + x, 38, 1, 4);          // (a notch a swing)
+    const max = g.waterMax || WATER_MAX, w = 40 + Math.round(max * 0.5), inner = w - 8, fill = Math.round(inner * Math.max(0, g.water ?? max) / max), low = (g.water ?? max) < SWING_COST;          // (longer with each potion)
+    this.tankE.setSize(w, 21); this.tankF.setSize(w, 21); this.tankM.clear().fillStyle(0xffffff).fillRect(8, 36, fill + 4, 21);
+    if (low) this.tankF.setTint(0xff9a9a); else this.tankF.clearTint();
+    for (let x = SWING_COST; x < max; x += SWING_COST) b.fillStyle(0x10202c, 0.55).fillRect(12 + Math.round(inner * x / max), 41, 1, 11);          // (a notch a swing)
     // the boss's bar
     const boss = this.monsters.find((m) => m.big);
     if (boss && this.state === 'play') { const bw = 300, f = Math.round(bw * boss.hp / boss.maxHp); b.fillStyle(0x2b2418, 1).fillRect(W / 2 - bw / 2 - 2, 24, bw + 4, 10); b.fillStyle(0x1a2a4a, 1).fillRect(W / 2 - bw / 2, 26, bw, 6); b.fillStyle(0x2aa0ff, 1).fillRect(W / 2 - bw / 2, 26, f, 6); this.bossText.setText(T('boss')); }

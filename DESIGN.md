@@ -5,7 +5,7 @@ The numbers live at the top of `game.js`; this file says what they mean and why 
 
 ## The game
 A girl in a yellow raincoat puts out fire monsters with the water her closed umbrella throws, before the forest burns.
-Ten rounds; the last has a crowned blue boss. Arrow keys / WASD move, Space / J swings.
+Ten rounds; the last has a crowned blue boss. Arrow keys / WASD move, Space / J swings - again while swinging for the backhand.
 
 - **The screen**: 960 x 540 game pixels, scaled up whole (2x on a 1080p screen) without smoothing - every art pixel is a game pixel.
 - **The view**: 2:1 isometric, as the girl is rendered (30 degrees down). The ground is a grid of 32 x 16 diamonds; walking diagonally
@@ -15,8 +15,8 @@ Ten rounds; the last has a crowned blue boss. Arrow keys / WASD move, Space / J 
 | | |
 |---|---|
 | Hearts | 5. A hit: knocked back, 1.3 s safe, the wince face for a moment |
-| Water tank | 100; a swing costs 18; the rain fills it 15 a second (3x standing in a puddle) |
-| The swing | a fan in front of her, 130 world px, 68 degrees each side, on frames 3-6; one hit a monster a swing |
+| Water tank | 200 (it grows: each potion adds 25, up to 300); a swing costs 18; the rain fills it 15 a second (3x standing in a puddle) |
+| The swing - a combo | **downward cut**: a fan in front of her, 155 world px, 42 degrees each side, on frames 4-6. Pressed again during it, a **spinning backhand** follows: all round her, 118 world px, on frames 4-7, a monster thrown away from her. 15 frames a second each; each costs its water; one hit a monster a move |
 | Fire on the ground | catches where a monster lands and where a fireball falls (a ragged blob, not a square); spreads to the diamond beside it - downwind up to 2.5x as likely; burns ~15 s, then ash |
 | The wind | a new one each round (shown with the round's number): the rain slants with it, the trees lean, smoke and sparks drift, the fire spreads its way |
 | Burning ground | she cannot walk into it; caught on it, she is hurt and thrown clear; water puts it out (a blue fire takes two, three while the boss lives) |
@@ -24,7 +24,7 @@ Ten rounds; the last has a crowned blue boss. Arrow keys / WASD move, Space / J 
 | Rocks | three boulders: walked round, like a tree trunk |
 | Bushes | catch the same way, burn ~7 s, saved within 4 s; walked through, not round |
 | Puddles | 2-3 a round, somewhere new; fire does not catch on them, fireballs die in them; a fire monster landing in one loses 1 hp and boils 4 s of the puddle's life away; dry up 22-35 s in |
-| Drops | a monster put out leaves one 30 % of the time (the boss always): a heart and 40 water |
+| Drops | a monster put out leaves something half the time: a **heart** (a life back and 40 water) or - 40 % of those, while the tank can still grow - a **potion** (a violet flask with a gold cap and a twinkle: the tank 25 bigger, to 300, and 60 water more). The boss leaves both |
 
 ### The fires
 | | hp | trait | its ground fire |
@@ -54,9 +54,9 @@ The hook stays in the game for this: `window.BOT = (scene) => [dx, dy, swing]`, 
 ## The pictures
 | | made how |
 |---|---|
-| The girl (walk with umbrella, swing, stand, in four diagonal facings) | SpriteCast: a 3D model (Tripo) rigged and rendered at 30 degrees, each frame redrawn as 96 px pixel art by an image model, read back on its grid; the umbrella's colours fixed frame to frame; white specks and the odd frame fixed by hand in pixeledit |
+| The girl (walk with umbrella, the downward cut and the backhand, stand, in four diagonal facings) | SpriteCast: a 3D model (Tripo) rigged and rendered at 30 degrees, each frame redrawn as 96 px pixel art by an image model, read back on its grid; the umbrella's colours fixed frame to frame; white specks and the odd frame fixed by hand in pixeledit |
 | The standing loop | SpriteCast's own idle (`idleclip.py`) - a breath and a sway, 3 frames |
-| Her water | the swing's effect rendered in 3D and turned into pixel art by SpriteCast, every facing |
+| Her water | the swing's effect rendered in 3D and turned into pixel art by SpriteCast, every facing; the combo's two moves are Mixamo motion capture ("Standing Melee Attack Downward", "... Backhand") carried onto her rig, made a sword's cut and joined with SpriteCast's motion.py, the water fading out at twice her height |
 | The wince | the standing frame with the eyes squeezed shut, by rule (`tools/make_hurt.py`) |
 | Fire monster (three faces) | its 3D model baked to a picture, then drawn as pixel art by an image model; the other colours by moving its channels round in code |
 | Ground tile, burning ground, ash, flames, crown, puddles | drawn as pixel art by an image model on a grid and read back at the grid it drew |

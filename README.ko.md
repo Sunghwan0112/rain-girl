@@ -14,7 +14,7 @@
 | | |
 |---|---|
 | **이동** | 방향키 / WASD |
-| **우산 휘두르기** (물 뿌리기) | Space / J |
+| **우산 휘두르기** (물 뿌리기) | Space / J - 휘두르는 중에 한 번 더: 돌려 베기 |
 | **언어 바꾸기** | 시작 화면에서 L |
 | **다시 하기** | R |
 | **폰이나 태블릿에서** | 왼손 엄지: 이동 · 오른손 엄지: 휘두르기 · 화면을 눌러 시작 (게임이 알아서 터치 조작으로 바뀌어요) |
@@ -22,7 +22,7 @@
 불꽃 몬스터가 숲을 뛰어다녀요. 몬스터가 내려앉은 자리에 풀이 타기 시작하고, 불은 번지고, 타는 땅은 길을 막고, 나무에도 불이
 붙어요. 숲이 다 타기 전에 몬스터와 몬스터가 남긴 불을 꺼 주세요.
 
-- **물은 떨어져요.** 휘두를 때마다 물이 줄고, 비가 다시 채워 줘요. 웅덩이에 서 있으면 세 배 빨리 차요.
+- **물은 떨어져요.** 휘두를 때마다 물이 줄고, 비가 다시 채워 줘요. 웅덩이에 서 있으면 세 배 빨리 차요. 불꽃이 남긴 물약을 먹으면 물통이 커져요.
 - **바람은 라운드마다 바뀌어요.** 비가 바람 따라 기울고, 나무가 흔들리고, 불도 바람 쪽으로 번져요.
 - **나무를 지켜요.** 불붙은 나무는 4초 안에 물을 뿌리면 살아나요. 늦으면 반쯤 타고, 그대로 두면 다 타 버려요.
 - **물웅덩이로 유인해요.** 불꽃이 웅덩이에 내려앉으면 치익 하고 체력이 하나 줄어요. 작은 불꽃은 두세 번이면 꺼져요. 대신
@@ -92,6 +92,7 @@ cd rain-girl && python3 -m http.server 8000      # 그다음 http://localhost:80
 - **엔진**: [Phaser 3](https://phaser.io) (MIT)
 - **글꼴**: 이민서 님의 [Galmuri11](https://github.com/quiple/galmuri) (SIL OFL 1.1, `assets/font/OFL.md`)
 - **그림**: [SpriteCast](https://github.com/Sunghwan0112/spritecast), Tripo 3D 모델, GPT 이미지 모델로 만들었어요
+- **이펙트**: 맞을 때, 불이 꺼질 때, 불덩이, 아이템, 돌려 베기의 고리는 Pixel VFX Studio의 [PVFX Foundry](https://nerijs.itch.io/pvfx-foundry) (CC0 1.0) - [`assets/fx/CREDITS.md`](assets/fx/CREDITS.md) · [`assets/items/CREDITS.md`](assets/items/CREDITS.md)
 - **소리**: [Kenney](https://kenney.nl)와 OpenGameArt의 CC0 효과음, 코드로 만든 소리, Suno로 만든 음악 -
   [`assets/audio/CREDITS.md`](assets/audio/CREDITS.md)
 

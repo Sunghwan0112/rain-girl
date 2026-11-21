@@ -15,14 +15,14 @@
 | | |
 |---|---|
 | **移动** | 方向键 / WASD |
-| **挥伞(洒水)** | Space / J |
+| **挥伞(洒水)** | Space / J - 挥动时再按一次: 回旋斩 |
 | **切换语言** | 在标题画面按 L |
 | **再玩一次** | R |
 | **手机或平板** | 左手拇指: 移动 · 右手拇指: 挥伞 · 点击屏幕开始 (游戏会自动切换为触屏操作) |
 
 火焰怪物在森林里跳来跳去。它们落下的地方草会着火,火会蔓延,燃烧的地面会挡住去路,树也会烧起来。在森林烧光之前,把怪物和它们留下的火扑灭。
 
-- **水会用完。** 每挥一次都会耗水,雨会重新把水装满;站在水坑里装得快三倍。
+- **水会用完。** 每挥一次都会耗水,雨会重新把水装满;站在水坑里装得快三倍。捡到火焰留下的药水瓶,水壶会变大。
 - **每一回合风向都会变。** 雨随风倾斜,树被吹弯,火也顺着风蔓延。
 - **保护树木。** 树着火后 4 秒内洒水就能救下。晚了会烧掉一半;放着不管就会烧光。
 - **把它们引进水里。** 火焰落进水坑会嘶地一声并少一点生命 —— 小火焰落两三次就灭了。不过水坑也会被煮掉一些,干得更快。
@@ -82,6 +82,7 @@ cd rain-girl && python3 -m http.server 8000      # 然后打开 http://localhost
 - **引擎**: [Phaser 3](https://phaser.io)(MIT)
 - **字体**: Lee Minseo 的 [Galmuri11](https://github.com/quiple/galmuri)(SIL OFL 1.1,`assets/font/OFL.md`)
 - **美术**: 用 [SpriteCast](https://github.com/Sunghwan0112/spritecast)、Tripo 3D 模型和 GPT 图像模型制作
+- **特效**：命中、熄灭的火、火球、道具和回旋斩的环来自 Pixel VFX Studio 的 [PVFX Foundry](https://nerijs.itch.io/pvfx-foundry)（CC0 1.0）- [`assets/fx/CREDITS.md`](assets/fx/CREDITS.md) · [`assets/items/CREDITS.md`](assets/items/CREDITS.md)
 - **声音**: [Kenney](https://kenney.nl) 和 OpenGameArt 的 CC0 音效、用代码生成的声音、用 Suno 制作的音乐 —— 见 [`assets/audio/CREDITS.md`](assets/audio/CREDITS.md)
 
 ## 许可

@@ -14,7 +14,7 @@ A small pixel-art action game you play in the browser - no install, no account.<
 | | |
 |---|---|
 | **Move** | arrow keys / WASD |
-| **Swing the umbrella** (throw water) | Space / J |
+| **Swing the umbrella** (throw water) | Space / J - again while swinging: a spinning backhand |
 | **Change the language** | L, on the title screen |
 | **Play again** | R |
 | **On a phone or tablet** | left thumb: move · right thumb: swing · tap to start (the game turns to touch by itself) |
@@ -22,7 +22,7 @@ A small pixel-art action game you play in the browser - no install, no account.<
 Fire monsters hop through the forest. Where they land, the grass catches; the fire spreads, burning ground blocks your way, and trees
 go up in flames. Put the monsters out - and the fires they leave - before the forest burns.
 
-- **Your water runs out.** Every swing costs water; the rain fills the tank again, three times as fast while you stand in a puddle.
+- **Your water runs out.** Every swing costs water; the rain fills the tank again, three times as fast while you stand in a puddle. A potion a fire leaves makes the tank bigger.
 - **The wind changes every round.** The rain slants with it, the trees lean, and the fire spreads its way.
 - **Save the trees.** A tree that catches can be saved with water within 4 seconds. Later it is half burnt; left alone, it burns down.
 - **Lead them into the water.** A fire that lands in a puddle hisses and loses a life - two or three landings put a small one out.
@@ -93,6 +93,7 @@ Without the online board set up, the game keeps a leaderboard in your browser.
 - **Engine**: [Phaser 3](https://phaser.io) (MIT).
 - **Font**: [Galmuri11](https://github.com/quiple/galmuri) by Lee Minseo (SIL OFL 1.1, `assets/font/OFL.md`).
 - **Art**: made with [SpriteCast](https://github.com/Sunghwan0112/spritecast), Tripo 3D models and GPT image models.
+- **Effects**: hits, fires put out, fireballs, pickups and the backhand's rings from [PVFX Foundry](https://nerijs.itch.io/pvfx-foundry) by Pixel VFX Studio (CC0 1.0) - see [`assets/fx/CREDITS.md`](assets/fx/CREDITS.md) · [`assets/items/CREDITS.md`](assets/items/CREDITS.md).
 - **Sound**: CC0 sounds from [Kenney](https://kenney.nl) and OpenGameArt, some made in code; music made with Suno - see
   [`assets/audio/CREDITS.md`](assets/audio/CREDITS.md).
 

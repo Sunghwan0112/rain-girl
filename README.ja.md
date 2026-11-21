@@ -15,14 +15,14 @@
 | | |
 |---|---|
 | **移動** | 矢印キー / WASD |
-| **傘を振る (水をかける)** | Space / J |
+| **傘を振る (水をかける)** | Space / J - 振っている間にもう一度: 回転斬り |
 | **言語を変える** | タイトル画面で L |
 | **もう一度** | R |
 | **スマホ・タブレット** | 左の親指: 移動 · 右の親指: 傘をふる · タップでスタート (自動でタッチ操作に切り替わります) |
 
 炎のモンスターが森を跳ねまわります。降りた場所の草に火がつき、火は広がり、燃える地面は道をふさぎ、木にも燃え移ります。森が焼ける前に、モンスターと残した火を消してください。
 
-- **水はなくなります。** 振るたびに水が減り、雨がまた満たします。水たまりに立つと3倍の速さでたまります。
+- **水はなくなります。** 振るたびに水が減り、雨がまた満たします。水たまりに立つと3倍の速さでたまります。炎が残す薬びんを取ると水筒が大きくなります。
 - **風はラウンドごとに変わります。** 雨が風で傾き、木がしなり、火も風下へ広がります。
 - **木を守る。** 火のついた木は4秒以内に水をかければ助かります。遅れると半分焼け、放っておくと焼け落ちます。
 - **水たまりへ誘いこむ。** 炎が水たまりに降りるとジュッと音がして体力が1つ減ります。小さな炎なら2〜3回で消えます。ただしそのぶん水たまりは煮えて早く乾きます。
@@ -82,6 +82,7 @@ cd rain-girl && python3 -m http.server 8000      # そのあと http://localhost
 - **エンジン**: [Phaser 3](https://phaser.io) (MIT)
 - **フォント**: Lee Minseo さんの [Galmuri11](https://github.com/quiple/galmuri) (SIL OFL 1.1、`assets/font/OFL.md`)
 - **絵**: [SpriteCast](https://github.com/Sunghwan0112/spritecast)、Tripo の3Dモデル、GPT の画像モデルで作りました
+- **エフェクト**: 当たり、消える火、火の玉、アイテム、回転斬りの輪は Pixel VFX Studio の [PVFX Foundry](https://nerijs.itch.io/pvfx-foundry) (CC0 1.0) - [`assets/fx/CREDITS.md`](assets/fx/CREDITS.md) · [`assets/items/CREDITS.md`](assets/items/CREDITS.md)
 - **音**: [Kenney](https://kenney.nl) と OpenGameArt の CC0 効果音、コードで作った音、Suno で作った音楽 - [`assets/audio/CREDITS.md`](assets/audio/CREDITS.md)
 
 ## ライセンス

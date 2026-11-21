@@ -15,14 +15,14 @@ Un pequeño juego de acción en pixel art que se juega en el navegador: sin inst
 | | |
 |---|---|
 | **Moverse** | flechas / WASD |
-| **Agitar el paraguas (lanzar agua)** | Space / J |
+| **Agitar el paraguas (lanzar agua)** | Space / J - otra vez mientras golpeas: un revés giratorio |
 | **Cambiar el idioma** | L, en la pantalla de título |
 | **Jugar otra vez** | R |
 | **En móvil o tableta** | pulgar izquierdo: mover · pulgar derecho: agitar el paraguas · toca para empezar (el juego pasa al modo táctil solo) |
 
 Los monstruos de fuego saltan por el bosque. Donde caen, la hierba prende; el fuego se extiende, el suelo en llamas te corta el paso y los árboles arden. Apaga a los monstruos, y los fuegos que dejan, antes de que se queme el bosque.
 
-- **El agua se acaba.** Cada golpe gasta agua; la lluvia vuelve a llenar el depósito, tres veces más rápido si estás en un charco.
+- **El agua se acaba.** Cada golpe gasta agua; la lluvia vuelve a llenar el depósito, tres veces más rápido si estás en un charco. Una poción que deja un fuego agranda el depósito.
 - **El viento cambia en cada ronda.** La lluvia se inclina con él, los árboles se doblan y el fuego se extiende hacia donde sopla.
 - **Salva los árboles.** Un árbol que prende se salva con agua en 4 segundos. Más tarde queda medio quemado; si lo dejas, se quema del todo.
 - **Llévalos al agua.** Un fuego que cae en un charco silba y pierde una vida: dos o tres caídas apagan uno pequeño. Pero hace hervir el charco, que se seca antes.
@@ -82,6 +82,7 @@ Si no configuras la clasificación en línea, el juego guarda una clasificación
 - **Motor**: [Phaser 3](https://phaser.io) (MIT)
 - **Fuente**: [Galmuri11](https://github.com/quiple/galmuri) de Lee Minseo (SIL OFL 1.1, `assets/font/OFL.md`)
 - **Arte**: hecho con [SpriteCast](https://github.com/Sunghwan0112/spritecast), modelos 3D de Tripo y modelos de imagen de GPT
+- **Efectos**: golpes, fuegos apagados, bolas de fuego, objetos y los anillos del revés son de [PVFX Foundry](https://nerijs.itch.io/pvfx-foundry) de Pixel VFX Studio (CC0 1.0) - [`assets/fx/CREDITS.md`](assets/fx/CREDITS.md) · [`assets/items/CREDITS.md`](assets/items/CREDITS.md).
 - **Sonido**: sonidos CC0 de [Kenney](https://kenney.nl) y OpenGameArt, algunos hechos con código; música hecha con Suno: ver [`assets/audio/CREDITS.md`](assets/audio/CREDITS.md)
 
 ## Licencia

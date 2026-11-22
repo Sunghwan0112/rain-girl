@@ -16,7 +16,7 @@ const TREE_DIM = 0.82;          // how bright a green tree is shown, of how it w
 const BUSH_DIM = 0.82;          // the same for a green bush, drawn brighter than the trees; its two brighter sides (0 and 270) are brought down to the other two
 const ROCK_DIM = 0.9;          // and for a rock
 const dimmed = (c, k = 1) => k === 1 ? c : (Math.round((c >> 16 & 255) * k) << 16) | (Math.round((c >> 8 & 255) * k) << 8) | Math.round((c & 255) * k);
-const ASSET_V = 45;          // (the soft edges below are made in code: no new pictures)
+const ASSET_V = 48;          // (the soft edges below are made in code: no new pictures)
 // a mushroom's cap: as drawn (red), orange, wine - the reds of the cap only; its pale spots, the stem and the grass as they are
 const CAP_HUES = [null, (r, g, b) => [r, Math.round(g + (r - g) * 0.42), b], (r, g, b) => [Math.round(r * 0.8), Math.round(g * 0.62), Math.round(b + (r - b) * 0.28)]];
 const INK = [0x2b, 0x24, 0x18];
@@ -97,6 +97,8 @@ const flameKey = (i, kind, size = '') => (kind === 'red' ? `flame-${i}` : `flame
 const WAVER = [1, 0.82, 0.66, 0.82];          // a flame's see-through waver, by steps
 const FIRE_FRAME = { normal: [42, 64], hurt: [41, 57], dead: [45, 49] };
 const GHOST = { tree: 0.6, bush: 0.3, max: 3, speed: 38, drain: 45, life: 26, fw: 69, fh: 58, fps: 9 };
+const TANK = { capL: 29, capR: 30, top: 4, bot: 20 };          // (the tank's picture: its caps' widths, the glass's inside rows)
+const DROP = { heart: { w: 29, h: 24, foot: [14.5, 23.5], sh: [-10, 10], perUp: [-37.8, -35.1], ppm: 90 }, potion: { w: 22, h: 34, foot: [9.9, 31.4], sh: [-9, 15], perUp: [-47.46, -44.07], ppm: 113 } };          // (the heart drawn smaller than the potion - the user: it looked too big beside it)          // (the items on the ground: size, where each stands, its 3D shadow's top-left; how far a shadow moves for each metre up - spritecast's pixel.json)
 const HEARTS = 5, WATER_MAX = 200, WATER_GROW = 25, WATER_CAP = 300, SWING_COST = 18, WATER_REGEN = 15, DROP_CHANCE = 0.5, POTION_SHARE = 0.4;          // (a drop or, POTION_SHARE of the time while the tank can grow, a potion)
 // PUDDLES: two or three each round, somewhere new - fire does not catch on them, a fireball dies in them, and standing in one fills
 // the tank three times as fast. They dry up from the edge: gone ~35 s into the round.
@@ -198,7 +200,8 @@ class Chapter1 extends Phaser.Scene {
       this.load.spritesheet(`${a}-${f}`, `assets/girlpx/${a}-${f}.png`, { frameWidth: PX.w, frameHeight: PX.h });
       const s = SHADOW[`${a}-${f}`]; this.load.spritesheet(`sh-${a}-${f}`, `assets/girlpx/shadows/${a}-${f}.png`, { frameWidth: s[0], frameHeight: s[1] });
     }
-    this.load.image('item-heart', 'assets/items/heart.png'); this.load.image('item-potion', 'assets/items/potion.png'); this.load.image('tank-full', 'assets/items/tank-full.png'); this.load.image('tank-empty', 'assets/items/tank-empty.png');          // (assets/items/CREDITS.md)
+    this.load.image('item-heart', 'assets/items/heart-hud.png');          // (her hearts: the same 3D heart as the one on the ground, drawn from the front)
+     this.load.image('item-potion', 'assets/items/potion.png'); for (const n of ['heart', 'potion']) { this.load.image(`drop-${n}`, `assets/items/${n}-iso.png`); this.load.image(`drop-${n}-sh`, `assets/items/${n}-iso-shadow.png`); } for (const n of ['cap-l', 'cap-r', 'glass']) this.load.image(`tank-${n}`, `assets/items/tank-${n}.png`);          // (assets/items/CREDITS.md)
     for (const [k, e] of Object.entries(FX)) this.load.spritesheet(`fx-${k}`, `assets/fx/${k}.png`, { frameWidth: e.w, frameHeight: e.h });          // (PVFX Foundry, CC0)
     for (const m of Object.keys(MOVES)) for (const f of DIAG) {
       const n = `${m}-${f}`, s = ATTACK.shadows[n];
@@ -275,10 +278,12 @@ class Chapter1 extends Phaser.Scene {
   // round each one walking: the plants rooted just in front of their feet, a few strips cropped to them, from a pool
   grassFeet() {
     if (!this.gfFeet) return; let n = 0;
-    const who = [this.girl];          // (her only: a fire monster burns the grass it stands in, a ghost floats over it - the user: the grass not in front of them)
-    for (const w of who) for (const [i, a, b] of (this.wetAt(w.x, w.y) || this.wetAt(w.x, w.y + 6) ? [] : this.gfFeet(w.x, w.y - 1, w === this.girl ? 14 : 16, 10))) {          // (in a puddle: no grass in front - it came up through the water)
+    const who = [[this.girl.x, this.girl.y, 14]];          // (her, and the items - the user: the items hidden by the grass too; not a fire monster - it burns the grass it stands in - nor a ghost, floating over it)
+    for (const it of this.items) if (it.spr.visible) who.push([it.x, it.y, DROP[it.kind === 'potion' ? 'potion' : 'heart'].w / 2, it.y - 7]);          // (floating: only its lowest few px in the grass - low, its bottom in it; high, clear of it)
+    for (const [wx, wy, half, top] of who) for (const [i, a, b] of (this.wetAt(wx, wy) || this.wetAt(wx, wy + 6) ? [] : this.gfFeet(wx, wy - 1, half, 10))) {          // (in a puddle: no grass in front - it came up through the water)
       const r = this.gf[i]; let im = this.gfPool[n]; if (!im) im = this.gfPool[n] = this.add.image(0, 0, 'grassfront', 's0').setOrigin(0);
-      im.setFrame('s' + i).setPosition(r[1], r[2]).setCrop(a - r[1], 0, b - a, r[4]).setDepth(r[0] + 0.25).setVisible(true); n++;
+      const cy = top === undefined ? 0 : Math.max(0, Math.min(r[4], top - r[2]));
+      im.setFrame('s' + i).setPosition(r[1], r[2]).setCrop(a - r[1], cy, b - a, r[4] - cy).setDepth(r[0] + 0.25).setVisible(true); n++;
     }
     for (let k = n; k < this.gfPool.length; k++) this.gfPool[k].setVisible(false);
   }
@@ -621,17 +626,19 @@ class Chapter1 extends Phaser.Scene {
 
     // letters: the pixel font at its own size (11 px) or twice or three times that - never between
     const txt = (x, y, size, col = '#fff8e8') => ptext(this, x, y, '', size, col);
-    // her hearts: the glossy heart she picks up (CC0, assets/items/CREDITS.md); a lost one the same heart, dark and grey
+    // her hearts: the heart she picks up, seen from the front (assets/items/CREDITS.md); a lost one the same heart, dark and grey
     { const src = this.textures.get('item-heart').getSourceImage(), t = this.textures.createCanvas('item-heart-empty', src.width, src.height), c = t.getContext();
       c.drawImage(src, 0, 0); const d = c.getImageData(0, 0, src.width, src.height);
       for (let i = 0; i < d.data.length; i += 4) { const v = Math.round((0.3 * d.data[i] + 0.59 * d.data[i + 1] + 0.11 * d.data[i + 2]) * 0.55); d.data[i] = v + 8; d.data[i + 1] = v + 2; d.data[i + 2] = v; }
       c.putImageData(d, 0, 0); t.refresh(); }
     this.hearts = Array.from({ length: HEARTS }, (_, i) => this.add.image(8 + i * 32, 5, 'item-heart').setOrigin(0).setDepth(6000));
-    // THE WATER TANK: a glass bar (CC0, assets/items/CREDITS.md), its ends kept and its middle stretched as the tank grows (a nine-slice);
-    // the water in it the full bar, shown up to how much there is
-    this.tankE = this.add.nineslice(8, 36, 'tank-empty', null, 140, 21, 10, 10, 0, 0).setOrigin(0).setDepth(6000);
-    this.tankF = this.add.nineslice(8, 36, 'tank-full', null, 140, 21, 10, 10, 0, 0).setOrigin(0).setDepth(6001);
-    this.tankM = this.make.graphics({ add: false }); this.tankF.setMask(this.tankM.createGeometryMask());
+    // THE WATER TANK: a glass tube with brass caps (a 3D model drawn from the front, assets/items/CREDITS.md) - the caps kept, the glass
+    // between them one clean column stretched as the tank grows; the water drawn under the glass each frame (drawTank): it ripples, sloshes
+    // when she swings, bubbles while the rain fills it
+    this.tankWater = this.add.graphics().setDepth(6001);
+    this.tankGlass = this.add.image(8 + TANK.capL, 36, 'tank-glass').setOrigin(0).setDepth(6002);
+    this.tankCapL = this.add.image(8, 36, 'tank-cap-l').setOrigin(0).setDepth(6003); this.tankCapR = this.add.image(0, 36, 'tank-cap-r').setOrigin(0).setDepth(6003);
+    this.tankWas = WATER_MAX; this.slosh = 0; this.bubbles = [];
     this.bars = this.add.graphics().setDepth(6000);
     this.scoreText = txt(W - 12, 26, 11, '#ffe6b0').setOrigin(1, 0).setDepth(6000);
     this.bossText = txt(W / 2, 8, 11, '#bfe8ff').setOrigin(0.5, 0).setDepth(6000);
@@ -892,24 +899,26 @@ class Chapter1 extends Phaser.Scene {
 
   // A DROP that heals: left now and then by a monster put out (always by the boss); a heart back and the tank a little fuller
   dropItem(x, y, kind = 'drop') {
-    const it = { x, y, kind, age: 0, spr: this.add.image(R(x), R(y), kind === 'potion' ? 'item-potion' : 'item-heart').setOrigin(0.5, 1).setDepth(y) };          // (32 px, pixel for pixel: a heart drawn for the game; a potion, CC0 - assets/items/CREDITS.md)
-    if (kind === 'potion') it.tw = this.add.image(0, 0, 'twinkle').setOrigin(0.5).setScale(2).setDepth(y + 1);          // (its star)
-    it.sh = this.add.image(R(x), R(y), 'shadow-item').setOrigin(0.5, 0.5).setDepth(-499);
+    const n = kind === 'potion' ? 'potion' : 'heart', D = DROP[n];          // (seen at the game's angle, as everything on the ground; the potion's glass see-through)
+    const it = { x, y, kind, age: Math.random() * 3, spr: this.add.image(R(x), R(y), `drop-${n}`).setOrigin(D.foot[0] / D.w, D.foot[1] / D.h).setDepth(y) };
+    it.sh = this.add.image(0, 0, `drop-${n}-sh`).setOrigin(0).setDepth(-499); it.sh0 = [x - D.foot[0] + D.sh[0], y - D.foot[1] + D.sh[1]]; it.D = D; it.age0 = it.age;          // (its shadow cast from its 3D model by the props' sun)
     this.items.push(it);
   }
   updateItems(dt) {
     const g = this.girl;
     for (const it of this.items) {
-      it.age += dt; it.spr.setY(R(it.y - 2 - (Math.floor(it.age * 4) % 2) * 2)).setVisible(it.age < 7 || Math.floor(it.age * 8) % 2 === 0);
-      if (it.tw) { const on = Math.floor(it.age * 5) % 3 === 0; it.tw.setPosition(R(it.x + 12), R(it.y - 30 - (Math.floor(it.age * 4) % 2) * 2)).setVisible(on && it.spr.visible); }          // (a twinkle, a beat in three)
+      it.age += dt; const up = 5 + 3.5 * Math.sin(it.age * 2.6);          // (floating: up and down softly, 1.5-8.5 px over the ground, each at its own beat)
+      it.spr.setY(R(it.y - up)).setVisible(it.age - it.age0 < 7 || Math.floor(it.age * 8) % 2 === 0);
+      const hm = up / (it.D.ppm * Math.cos(Math.PI / 6));          // (floating: its shadow slides along the sun's ray by how high it is, a little fainter)
+      it.sh.setPosition(R(it.sh0[0] + it.D.perUp[0] * hm), R(it.sh0[1] + it.D.perUp[1] * hm)).setAlpha(1 - up * 0.03);
       if (wdist(it.x - g.x, it.y - g.y) < 26) {
         if (it.kind === 'potion') { const grow = Math.min(WATER_GROW, WATER_CAP - g.waterMax); g.waterMax += grow; g.water = Math.min(g.waterMax, g.water + 60 + grow); if (grow > 0) this.say(T('tankBigger')); }          // (a potion: the tank bigger, and fuller)
         else { g.hearts = Math.min(HEARTS, g.hearts + 1); g.water = Math.min(g.waterMax, g.water + 40); }          // (a heart: a life back, and some water)
         this.fx(it.kind === 'potion' ? 'potion' : 'heart', it.x, it.y - 8); it.age = 99; this.sfx('coin_0', 0.6); }
       it.sh.setVisible(it.spr.visible);
-      if (it.age > 9) { it.spr.destroy(); it.sh.destroy(); if (it.tw) it.tw.destroy(); }
+      if (it.age - it.age0 > 9) { it.spr.destroy(); it.sh.destroy(); }
     }
-    this.items = this.items.filter((it) => it.age <= 9);
+    this.items = this.items.filter((it) => it.age - it.age0 <= 9);
   }
 
   // the puddles: a picture each (big, then smaller as it dries: 2, 3, 4, gone); wet = the squares whose middle its picture covers
@@ -1497,14 +1506,31 @@ class Chapter1 extends Phaser.Scene {
     this.splashes = this.splashes.filter((p) => p.t < 0.13);
   }
 
+  drawTank() {
+    const g = this.girl, max = g.waterMax || WATER_MAX, water = Math.max(0, g.water ?? max), w = 40 + Math.round(max * 0.5);          // (longer with each potion)
+    const x0 = 8 + TANK.capL, inner = w - TANK.capL - TANK.capR, fill = inner * water / max, low = water < SWING_COST, t = this.time.now / 1000, dt = Math.min(0.05, this.game.loop.delta / 1000);
+    this.tankGlass.setDisplaySize(inner, 21); this.tankCapR.setX(x0 + inner);
+    if (water < this.tankWas - 5) this.slosh = 1;          // (a swing: the water sloshes, then settles)
+    const filling = water > this.tankWas + 1e-6 && water < max; this.tankWas = water; this.slosh = Math.max(0, this.slosh - dt * 1.4);
+    const q = this.tankWater.clear(), top = 36 + TANK.top, bot = 36 + TANK.bot, n = Math.floor(fill), blink = low && Math.floor(t * 4) % 2 === 0;
+    const body = blink ? 0xd86a6a : 0x2a86d8, deep = blink ? 0xa04848 : 0x1a5aa8, lite = blink ? 0xffc0c0 : 0x9ad8ff;          // (the puddles' and the drops' blues; nearly empty: it blinks red)
+    q.fillStyle(0x0a1620, 0.55).fillRect(x0, top, inner, bot - top);          // (the empty glass: dim inside, so where the water ends reads at a glance over a busy forest)
+    for (let i = 0; i < n + 1 && i < inner; i++) {
+      const edge = i >= n, wv = Math.sin(i * 0.55 - t * 5) * (0.5 + 2.2 * this.slosh) + Math.sin(i * 0.21 + t * 3.1) * 0.4 * (1 + this.slosh), y = Math.max(top, Math.min(bot - 4, Math.round(top + 1 + wv + (edge ? 2 + Math.sin(t * 9) : 0))));          // (the surface: small ripples, big ones after a swing; the front a little lower)
+      if (edge && fill - n < 0.35) break;
+      q.fillStyle(body, 1).fillRect(x0 + i, y, 1, bot - y - 2); q.fillStyle(deep, 1).fillRect(x0 + i, bot - 2, 1, 2); q.fillStyle(lite, 1).fillRect(x0 + i, y, 1, 1);
+    }
+    if (filling && Math.random() < dt * 9 && n > 2) this.bubbles.push({ x: x0 + 1 + Math.floor(Math.random() * (n - 2)), y: bot - 3, v: 6 + Math.random() * 6 });          // (the rain filling it: bubbles rise)
+    for (const p of this.bubbles) { p.y -= p.v * dt; if (p.x < x0 + n && p.y > top + 2) q.fillStyle(0xcdeeff, 0.9).fillRect(p.x, Math.round(p.y), 1, 1); }
+    this.bubbles = this.bubbles.filter((p) => p.y > top + 2 && p.x < x0 + n);
+    for (let x = SWING_COST; x < max; x += SWING_COST) q.fillStyle(0x0c1a24, 0.5).fillRect(x0 + Math.round(inner * x / max), top + 3, 1, bot - top - 6);          // (a notch a swing)
+  }
+
   drawUi() {
     const g = this.girl, b = this.bars; b.clear();
     this.hearts.forEach((h, i) => h.setTexture(i < g.hearts ? 'item-heart' : 'item-heart-empty'));
     // the water tank: a bar in whole pixels beside a drop
-    const max = g.waterMax || WATER_MAX, w = 40 + Math.round(max * 0.5), inner = w - 8, fill = Math.round(inner * Math.max(0, g.water ?? max) / max), low = (g.water ?? max) < SWING_COST;          // (longer with each potion)
-    this.tankE.setSize(w, 21); this.tankF.setSize(w, 21); this.tankM.clear().fillStyle(0xffffff).fillRect(8, 36, fill + 4, 21);
-    if (low) this.tankF.setTint(0xff9a9a); else this.tankF.clearTint();
-    for (let x = SWING_COST; x < max; x += SWING_COST) b.fillStyle(0x10202c, 0.55).fillRect(12 + Math.round(inner * x / max), 41, 1, 11);          // (a notch a swing)
+    this.drawTank();
     // the boss's bar
     const boss = this.monsters.find((m) => m.big);
     if (boss && this.state === 'play') { const bw = 300, f = Math.round(bw * boss.hp / boss.maxHp); b.fillStyle(0x2b2418, 1).fillRect(W / 2 - bw / 2 - 2, 24, bw + 4, 10); b.fillStyle(0x1a2a4a, 1).fillRect(W / 2 - bw / 2, 26, bw, 6); b.fillStyle(0x2aa0ff, 1).fillRect(W / 2 - bw / 2, 26, f, 6); this.bossText.setText(T('boss')); }

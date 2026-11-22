@@ -16,7 +16,7 @@ const TREE_DIM = 0.82;          // how bright a green tree is shown, of how it w
 const BUSH_DIM = 0.82;          // the same for a green bush, drawn brighter than the trees; its two brighter sides (0 and 270) are brought down to the other two
 const ROCK_DIM = 0.9;          // and for a rock
 const dimmed = (c, k = 1) => k === 1 ? c : (Math.round((c >> 16 & 255) * k) << 16) | (Math.round((c >> 8 & 255) * k) << 8) | Math.round((c & 255) * k);
-const ASSET_V = 24;
+const ASSET_V = 45;          // (the soft edges below are made in code: no new pictures)
 // a mushroom's cap: as drawn (red), orange, wine - the reds of the cap only; its pale spots, the stem and the grass as they are
 const CAP_HUES = [null, (r, g, b) => [r, Math.round(g + (r - g) * 0.42), b], (r, g, b) => [Math.round(r * 0.8), Math.round(g * 0.62), Math.round(b + (r - b) * 0.28)]];
 const INK = [0x2b, 0x24, 0x18];
@@ -89,6 +89,14 @@ const flameKey = (i, kind, size = '') => (kind === 'red' ? `flame-${i}` : `flame
 // it out); caught in one - it catches under her - she is hurt and thrown clear.
 // her: five hearts; a water tank the swing draws on (the rain fills it again); a monster put out may leave a heart (a life back), or a
 // potion that makes the tank bigger (WATER_GROW a potion, up to WATER_CAP: the game it lasts)
+// THE SMOKE GHOSTS: what rises from a tree or a bush burnt through - the more of the forest burns, the more of them. They float through
+// the trees at her, half see-through (SpriteCast: rigged from its 3D model - the tail sways, the arms swing - drawn as pixel art four
+// frames a sheet, see-through by the model's thickness, the thin parts fading now and then); a touch takes water from her tank, not a
+// heart, and it drifts back; one hit of her water scatters it. Gone at the end of the round.
+// the fire monster's three faces, each a strip of 8 frames: see-through by its 3D model's thickness, the tips fading now and then (SpriteCast translucent, "fire")
+const WAVER = [1, 0.82, 0.66, 0.82];          // a flame's see-through waver, by steps
+const FIRE_FRAME = { normal: [42, 64], hurt: [41, 57], dead: [45, 49] };
+const GHOST = { tree: 0.6, bush: 0.3, max: 3, speed: 38, drain: 45, life: 26, fw: 69, fh: 58, fps: 9 };
 const HEARTS = 5, WATER_MAX = 200, WATER_GROW = 25, WATER_CAP = 300, SWING_COST = 18, WATER_REGEN = 15, DROP_CHANCE = 0.5, POTION_SHARE = 0.4;          // (a drop or, POTION_SHARE of the time while the tank can grow, a potion)
 // PUDDLES: two or three each round, somewhere new - fire does not catch on them, a fireball dies in them, and standing in one fills
 // the tank three times as fast. They dry up from the edge: gone ~35 s into the round.
@@ -204,62 +212,109 @@ class Chapter1 extends Phaser.Scene {
                      'hurt_cute_0', 'hurt_cute_1', 'cry_boss_0', 'shot_fire_0', 'hit_1', 'crit_0', 'coin_0', 'error_0', 'hit_soft_0', 'hit_soft_1']) this.load.audio(n, [`assets/audio/${n}.m4a`, `assets/audio/${n}.ogg`]);          // (m4a plays everywhere, an iPhone too; ogg for a browser without it)
     for (const k of Object.keys(SHADE)) this.load.image(`${k}-shade`, `assets/px/props/${k}-shade.png`);
     // (the crowns' clumps of leaves, for the wind, come as numbers: clumps.js)          // (the props' shadows, baked from 3D)
-    for (const f of DIAG) this.load.image(`hurt-${f}`, `assets/girlpx/hurt-${f}.png`);          // (hit: the standing frame with the eyes squeezed shut - the faces that show)
-    for (const n of ['normal', 'hurt', 'dead']) this.load.image(`fire-${n}`, `assets/px/fire-${n}.png`);
+    for (const f of DIAG) this.load.image(`hurt-${f}`, `assets/girlpx/hurt-${f}.png`);
+    for (const f of DIAG) for (const c of ['carry', 'stand']) this.load.spritesheet(`refl-${c}-${f}`, `assets/girlpx/refl-${c}-${f}.png`, { frameWidth: PX.w, frameHeight: PX.h });          // (her reflection: seen from below, as the water shows her - tools/reflect_girl.py)          // (hit: the standing frame with the eyes squeezed shut - the faces that show)
+    for (const n of ['normal', 'hurt', 'dead']) this.load.spritesheet(`fire-${n}`, `assets/px/fire-${n}.png`, { frameWidth: FIRE_FRAME[n][0], frameHeight: FIRE_FRAME[n][1] });
+    this.load.spritesheet('ghost', 'assets/px/ghost.png', { frameWidth: GHOST.fw, frameHeight: GHOST.fh });          // (SpriteCast: the smoke ghost's 8 frames)
     for (let j = 0; j < 5; j++) this.load.image(`puddle-${j}`, `assets/px/puddle-${j}.png`);          // (round puddles, big to tiny: drawn by GPT)
     for (const n of ['burn', 'ash', 'flame-0', 'flame-1', 'flame-2']) this.load.image(n, `assets/px/${n}.png`);          // (the burning ground, its ash, the flames on it: drawn by GPT)
-    for (const n of ['ground', 'dirt', 'crown', 'block']) this.load.image(n, `assets/px/${n}.png`);          // (block: where nothing passes, marked by hand on the map - tools/blockedit.py)          // (the crown: drawn by GPT, read back on its grid)
+    for (const n of ['ground', 'dirt', 'crown', 'block', 'grassfield', 'terrain', 'grassfront']) this.load.image(n, `assets/px/${n}.png`);          // (block: where nothing passes, marked by hand on the map - tools/blockedit.py)          // (the crown: drawn by GPT, read back on its grid)
     for (const k of Object.keys(FOOT)) this.load.image(k, `assets/px/props/${k}.png`);          // (each prop from four sides: tree-0 .. stump-270)
   }
 
   // THE GROUND AS IT BURNS AND AFTER: 16 px squares made here, a few of each so the grid does not show - the burning ground (dark,
   // embers glowing, three frames), and the ash it leaves (grey, a few cinders); their edges ragged, so neighbours run into each other
+  // THE BURNT GROUND AND THE ASH: ONE LAYER over the whole map (the user: the squares should lie on the iso grid and not show between them),
+  // not a picture a square. Each pixel asks which squares round it burn (or are ash) - their share, eased between the squares' middles
+  // along the iso grid, with a 2-pixel ragged noise - so burning squares side by side are one patch with no seam, and only the patch's
+  // own edge shows, sinking into the grass in steps (solid, 0.8, 0.5). Its colour is GPT's seamless 64 px ground, by screen position,
+  // turned to the forest's tones: charred, dark and warm, some embers left glowing (they flicker); ash a grey-brown
   groundTiles() {
-    // the burning ground and the ash: GPT's two seamless 64 px squares, cut into 32 x 16 DIAMONDS - each diamond the piece of the repeat
-    // that lies where it stands on the screen (4 x 8 places), so burning diamonds side by side are one ground; their edges a little ragged
-    const cut = (src, key, bright) => {
-      const img = this.textures.get(src).getSourceImage(), S = img.width;
-      const sc = document.createElement('canvas'); sc.width = S; sc.height = S; const sx = sc.getContext('2d'); sx.drawImage(img, 0, 0); const sd = sx.getImageData(0, 0, S, S).data;
-      for (let j = 0; j < 8; j++) for (let i = 0; i < 4; i++) {
-        // each diamond spills past its edge in ragged 2-pixel clumps (PX_ x PY_ more round it): where the next one burns too they overlap
-        // and match (the same ground), where it does not the burnt patch ends unevenly, not along the grid
-        const PX_ = 8, PY_ = 4, TW = DW + 2 * PX_, TH = DH + 2 * PY_;
-        const tx = this.textures.createCanvas(`${key}_${i}_${j}`, TW, TH), c = tx.getContext(), d = c.createImageData(TW, TH);
-        const x0 = ((ISO_X - DW / 2 - PX_ + i * DW / 2) % S + S) % S, y0 = ((j * DH / 2 - PY_) % S + S) % S;
-        for (let y = 0; y < TH; y++) for (let x = 0; x < TW; x++) {
-          const e = Math.abs(x + 0.5 - TW / 2) / (DW / 2) + Math.abs(y + 0.5 - TH / 2) / (DH / 2); if (e > 1.45) continue;
-          const hsh = (((x >> 1) * 73 + (y >> 1) * 151 + i * 29 + j * 61) * 2654435761 >>> 0) % 100 / 100;          // (in 2-pixel clumps, the same way each time)
-          if (e > 0.9 && hsh > (1.45 - e) / 0.55) continue;
-          const so = (((y0 + y) % S) * S + ((x0 + x) % S)) * 4, o = (y * TW + x) * 4;
-          let r = sd[so], gg = sd[so + 1]; const b = sd[so + 2];
-          if (bright && r > 120 && r > b + 40) { r = Math.min(255, r * 1.15); gg = Math.min(255, gg * 1.3 + 12); }
-          d.data[o] = r; d.data[o + 1] = gg; d.data[o + 2] = b; d.data[o + 3] = 255;
-        }
-        c.putImageData(d, 0, 0); tx.refresh();
-      }
-    };
-    cut('burn', 'burn', false); cut('burn', 'burnB', true); cut('ash', 'ash', false);
+    const rd = (k) => { const s_ = this.textures.get(k).getSourceImage(), cv = document.createElement('canvas'); cv.width = s_.width; cv.height = s_.height; const x = cv.getContext('2d'); x.drawImage(s_, 0, 0); return { S: s_.width, d: x.getImageData(0, 0, s_.width, s_.height).data }; };
+    this.burnSrc = { burn: rd('burn'), ash: rd('ash') };
+    this.burnTex = this.textures.createCanvas('burnlayer', W, H); this.burnDirt = new Set();
+    this.add.image(0, 0, 'burnlayer').setOrigin(0).setDepth(-950);
   }
-
-
-
-  // THE FOOTPATH, made here once: the earth tile inside a winding band, sampled by screen position (no seams); its edge ragged in 2-pixel
-  // steps, a darker rim of earth along it, and a few blades of grass leaning in over it
-  footpath() {
-    const t = this.textures.createCanvas('footpath', W, H), c = t.getContext(), out = c.createImageData(W, H), o = out.data;
-    const rd = (k) => { const s = this.textures.get(k).getSourceImage(), cv = document.createElement('canvas'); cv.width = s.width; cv.height = s.height; const x = cv.getContext('2d'); x.drawImage(s, 0, 0); return { w: s.width, h: s.height, d: x.getImageData(0, 0, s.width, s.height).data }; };
-    const dirt = rd('dirt'), grass = rd('ground'), rnd = new Phaser.Math.RandomDataGenerator(['path']);
-    const nz = new Map(), noise = (x, y) => { const k = (x >> 1) + ',' + (y >> 1); if (!nz.has(k)) nz.set(k, rnd.between(-3, 3)); return nz.get(k); };
-    const inside = (x, y) => Math.abs(y - PATH_Y(x)) * 2 / Math.hypot(1, 1) < PATH_HALF + noise(x, y);          // (across the band, in world terms)
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-      if (Math.abs(y - PATH_Y(x)) > PATH_HALF + 8 || !inside(x, y)) continue;
-      const rim = !inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1) || !inside(x, y + 1), i = ((y % dirt.h) * dirt.w + (x % dirt.w)) * 4, j = (y * W + x) * 4;
-      let r = dirt.d[i], g = dirt.d[i + 1], b = dirt.d[i + 2];
-      if (rim) { r *= 0.72; g *= 0.72; b *= 0.72; }
-      else if (rnd.frac() < 0.04 && !inside(x, y - 3)) { const k = ((y % grass.h) * grass.w + (x % grass.w)) * 4; r = grass.d[k]; g = grass.d[k + 1]; b = grass.d[k + 2]; }          // (grass over the upper edge)
-      o[j] = r; o[j + 1] = g; o[j + 2] = b; o[j + 3] = 255;
+  // THE REFLECTIONS IN THE PUDDLES (the user: by the laws of light). Flat water is a mirror: the camera's mirror image looks UP 30
+  // degrees, so the water shows each thing from below, upside down about the ground under it, the same size (a point h up shows h cos30
+  // above its foot, its image as far below) - one in the air (a hop, a ghost's float) as far below as it is above. So it reaches a puddle
+  // only from beside or behind it, never from in front. Each puddle has a canvas of its own: its reflections drawn in, then cut to its
+  // water (alpha over 128) - by hand, so it works in WebGL and Canvas alike (a bitmap mask did not hold) - laid over it, dim: water gives
+  // back little light at this angle. Her picture is her rig rendered from below; the monsters' (no such render yet) their own, turned
+  reflections() {
+    const g = this.girl, gr = this.girlRefl;
+    for (const p of this.puddles || []) {
+      if (p.gone || !p.spr.active) continue;
+      const pk = p.spr.texture.key, src = this.textures.get(pk).getSourceImage(), pw = src.width, ph = src.height, x0 = Math.round(p.x - pw / 2), y0 = Math.round(p.y - ph / 2);
+      const items = [];
+      if (gr && gr.show && Math.abs(g.x - p.x) < pw / 2 + 24 && g.y < p.y + ph / 2 && g.y > p.y - ph / 2 - PX.h) items.push({ key: gr.key, frame: gr.frame, x: gr.x, top: gr.top, ready: true });
+      const mon = (spr, gy, x, a) => { const f = spr.frame, w = f.cutWidth * spr.scaleX, h = f.cutHeight * spr.scaleY, top = spr.y - spr.originY * h, bot = top + h;
+        if (Math.abs(x - p.x) < pw / 2 + w / 2 && gy < p.y + ph / 2 && gy > p.y - ph / 2 - h) items.push({ key: spr.texture.key, frame: f.name, x: spr.x - spr.originX * w, top: 2 * gy - bot, w, h, flipX: spr.flipX, mon: true }); };
+      for (const m of this.monsters) if (!m.dead && m.spr.visible && m.spr.alpha > 0.5) mon(m.spr, m.y, m.x);
+      for (const gh of this.ghosts || []) if (!gh.dead) mon(gh.spr, gh.y, gh.x);
+      if (!items.length) { if (p.rimg) p.rimg.setVisible(false); continue; }
+      const key = `reflcv-${p.rid}`;
+      if (!p.rcv || p.rcv.width !== pw || p.rcv.height !== ph) { this.dropRefl(p); p.rcv = this.textures.createCanvas(key, pw, ph); p.rimg = this.add.image(x0, y0, key).setOrigin(0).setDepth(-944).setAlpha(0.42); }
+      const c = p.rcv.getContext(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = 'source-over'; c.clearRect(0, 0, pw, ph); c.imageSmoothingEnabled = false;
+      for (const it of items) {
+        const f = this.textures.getFrame(it.key, it.frame), im = f.source.image, w = it.w || f.cutWidth, h = it.h || f.cutHeight;
+        if (it.ready) c.setTransform(1, 0, 0, 1, it.x - x0, it.top - y0);          // (hers: turned over already, about the ground's own line)
+        else c.setTransform(it.flipX ? -1 : 1, 0, 0, -1, (it.flipX ? it.x + w : it.x) - x0, it.top + h - y0);          // (upside down: its foot row on the ground's line)
+        c.drawImage(im, f.cutX, f.cutY, f.cutWidth, f.cutHeight, 0, 0, w, h);
+      }
+      c.setTransform(p.spr.flipX ? -1 : 1, 0, 0, 1, p.spr.flipX ? pw : 0, 0); c.globalCompositeOperation = 'destination-in'; c.drawImage(this.waterOf(pk), 0, 0);
+      c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = 'source-over'; p.rcv.refresh(); p.rimg.setPosition(x0, y0).setVisible(true);
     }
-    c.putImageData(out, 0, 0); t.refresh();
+  }
+  waterOf(key) {          // a puddle picture's water only (alpha over 128), as a canvas - what its reflections are cut to
+    this.waterCv = this.waterCv || {}; if (this.waterCv[key]) return this.waterCv[key];
+    const im = this.textures.get(key).getSourceImage(), cv = document.createElement('canvas'); cv.width = im.width; cv.height = im.height; const c = cv.getContext('2d'); c.drawImage(im, 0, 0);
+    const d = c.getImageData(0, 0, cv.width, cv.height); for (let i = 3; i < d.data.length; i += 4) d.data[i] = d.data[i] > 128 ? 255 : 0; c.putImageData(d, 0, 0); return (this.waterCv[key] = cv);
+  }
+  dropRefl(p) { if (p.rimg) p.rimg.destroy(); if (p.rcv) this.textures.remove(p.rcv.key); p.rimg = null; p.rcv = null; }
+  // round each one walking: the plants rooted just in front of their feet, a few strips cropped to them, from a pool
+  grassFeet() {
+    if (!this.gfFeet) return; let n = 0;
+    const who = [this.girl];          // (her only: a fire monster burns the grass it stands in, a ghost floats over it - the user: the grass not in front of them)
+    for (const w of who) for (const [i, a, b] of (this.wetAt(w.x, w.y) || this.wetAt(w.x, w.y + 6) ? [] : this.gfFeet(w.x, w.y - 1, w === this.girl ? 14 : 16, 10))) {          // (in a puddle: no grass in front - it came up through the water)
+      const r = this.gf[i]; let im = this.gfPool[n]; if (!im) im = this.gfPool[n] = this.add.image(0, 0, 'grassfront', 's0').setOrigin(0);
+      im.setFrame('s' + i).setPosition(r[1], r[2]).setCrop(a - r[1], 0, b - a, r[4]).setDepth(r[0] + 0.25).setVisible(true); n++;
+    }
+    for (let k = n; k < this.gfPool.length; k++) this.gfPool[k].setVisible(false);
+  }
+  burnDirty(c, r) { this.burnDirt.add(c + ',' + r); }
+  burnClear() { this.burnTex.getContext().clearRect(0, 0, W, H); this.burnTex.refresh(); this.burnDirt.clear(); }
+  burnRedraw() {
+    if (!this.burnDirt.size) return;
+    const ctx = this.burnTex.getContext(), state = (c, r) => { const k = c + ',' + r, f = this.fire.get(k); return f ? (f.br ? 3 : 2) : this.ash.has(k) ? 1 : 0; };
+    for (const key of this.burnDirt) {
+      const [c, r] = key.split(',').map(Number); let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      for (let dc = -1; dc <= 1; dc++) for (let dr = -1; dr <= 1; dr++) { const [cx, cy] = this.centre(c + dc, r + dr); x0 = Math.min(x0, cx - DW / 2); x1 = Math.max(x1, cx + DW / 2); y0 = Math.min(y0, cy - DH / 2); y1 = Math.max(y1, cy + DH / 2); }
+      x0 = Math.max(0, Math.floor(x0)); y0 = Math.max(0, Math.floor(y0)); x1 = Math.min(W, Math.ceil(x1)); y1 = Math.min(H, Math.ceil(y1));
+      if (x1 <= x0 || y1 <= y0) continue;
+      const bw = x1 - x0, bh = y1 - y0, img = ctx.createImageData(bw, bh), o = img.data, memo = new Map(), st = (cc, rr) => { const k = cc * 4096 + rr; if (!memo.has(k)) memo.set(k, state(cc, rr)); return memo.get(k); };
+      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
+        const a = (x + 0.5 - ISO_X) / (DW / 2), b = (y + 0.5) / (DH / 2), u = (a + b) / 2 - 0.5, v = (b - a) / 2 - 0.5, i0 = Math.floor(u), j0 = Math.floor(v), fu = u - i0, fv = v - j0;
+        let F = 0, Fb = 0, br = 0;
+        for (const [di, dj, w] of [[0, 0, (1 - fu) * (1 - fv)], [1, 0, fu * (1 - fv)], [0, 1, (1 - fu) * fv], [1, 1, fu * fv]]) { const s_ = st(i0 + di, j0 + dj); if (s_) { F += w; if (s_ >= 2) { Fb += w; if (s_ === 3) br += w; } } }
+        if (F <= 0) continue;
+        const n = ((((x >> 1) * 73 + (y >> 1) * 151) * 2654435761 >>> 0) % 100 / 100 - 0.5) * 0.36, G = F + n;
+        if (G < 0.5) continue;
+        const burn = Fb * 2 >= F, src = burn ? this.burnSrc.burn : this.burnSrc.ash, so = ((y % src.S) * src.S + (x % src.S)) * 4;
+        let R_ = src.d[so], Gg = src.d[so + 1], B_ = src.d[so + 2]; const l = (R_ + Gg + B_) / 3;
+        const h2 = ((((x >> 1) * 197 + (y >> 1) * 89) * 2246822519 >>> 0) % 100) / 100;
+        if (burn && R_ > 120 && R_ > B_ + 40 && h2 < 0.42) {
+          if (br * 2 >= Fb) { R_ = Math.min(255, R_ * 1.15); Gg = Math.min(255, Gg * 1.3 + 12); }
+          const f_ = this.fire.get(Math.floor(u + 0.5) + ',' + Math.floor(v + 0.5)), kd = f_ ? f_.kind : 'red';          // (the embers in the fire's own colour, as its flames are: recolour's channels)
+          if (kd === 'blue') { const t_ = R_; R_ = B_; B_ = t_; } else if (kd === 'green') { const t_ = R_; R_ = B_; B_ = Math.round(Gg * 0.5); Gg = t_; } else if (kd === 'purple') { const t_ = R_; R_ = Math.round(t_ * 0.85); Gg = B_; B_ = Math.min(255, Math.round(t_ * 0.95)); }
+        }
+        else if (!burn) { const q = l * 0.62 + 18; R_ = q * 1.04; Gg = q; B_ = q * 0.9; }
+        else { const q = l * 0.42 + 10; R_ = q * 1.12 + 6; Gg = q * 0.98 + 4; B_ = q * 0.78 + 2; }
+        const p_ = ((y - y0) * bw + (x - x0)) * 4; o[p_] = R_; o[p_ + 1] = Gg; o[p_ + 2] = B_; o[p_ + 3] = Math.round((G > 0.8 ? 1 : G > 0.65 ? 0.78 : 0.5) * (burn ? 178 : 150));          // (see-through: the grass under it shows a little - the user)
+      }
+      ctx.putImageData(img, x0, y0);
+    }
+    this.burnDirt.clear(); this.burnTex.refresh();
   }
 
   // a prop's picture, stood on its foot (FOOT: assets/px/props/foot.js)
@@ -412,6 +467,27 @@ class Chapter1 extends Phaser.Scene {
     t.refresh();
   }
 
+  // A FLAME'S SOFT EDGE (no 3D model to measure, so the distance in from its edge stands for its thickness): the rim pixel 0.3, the next
+  // 0.55, inside 0.8, the brightest core kept - in steps, so it stays pixel art. The ground's flames, the trees' and the fireball's flight;
+  // they waver besides, each to its own beat (WAVER)
+  softEdge(key) {
+    const tex = this.textures.get(key), src = tex.getSourceImage(), W = src.width, H = src.height, cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const c = cv.getContext('2d'); c.drawImage(src, 0, 0); const d = c.getImageData(0, 0, W, H), q = d.data, D = new Uint16Array(W * H);
+    for (let i = 0; i < W * H; i++) D[i] = q[i * 4 + 3] > 0 ? 999 : 0;
+    const at = (x, y) => (x < 0 || y < 0 || x >= W || y >= H ? 0 : D[y * W + x]);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = y * W + x; if (D[i]) D[i] = Math.min(D[i], at(x - 1, y) + 1, at(x - 1, y - 1) + 1, at(x, y - 1) + 1, at(x + 1, y - 1) + 1); }
+    for (let y = H - 1; y >= 0; y--) for (let x = W - 1; x >= 0; x--) { const i = y * W + x; if (D[i]) D[i] = Math.min(D[i], at(x + 1, y) + 1, at(x + 1, y + 1) + 1, at(x, y + 1) + 1, at(x - 1, y + 1) + 1); }
+    for (let i = 0; i < W * H; i++) {
+      if (!D[i]) continue; const l = (q[i * 4] + q[i * 4 + 1] + q[i * 4 + 2]) / 3;
+      let a = D[i] <= 1 ? 0.3 : D[i] === 2 ? 0.55 : 0.8; if (l > 225 && D[i] > 1) a = 0.9;
+      q[i * 4 + 3] = Math.round(q[i * 4 + 3] * a);
+    }
+    c.putImageData(d, 0, 0);
+    const frames = tex.getFrameNames().map((n) => { const f = tex.get(n); return [n, f.cutX, f.cutY, f.cutWidth, f.cutHeight]; });
+    this.textures.remove(key); const t = this.textures.addCanvas(key, cv);
+    for (const [n, x, y, w, h] of frames) t.add(n, 0, x, y, w, h);
+  }
+
   // a smaller copy of a pixel picture: each new pixel one of the old (nearest), so it stays pixel art - for flames young or dying
   smaller(key, suf, k) {
     const src = this.textures.get(key).getSourceImage(), w = Math.max(3, R(src.width * k)), h = Math.max(4, R(src.height * k)), t = this.textures.createCanvas(key + suf, w, h), c = t.getContext();
@@ -432,6 +508,7 @@ class Chapter1 extends Phaser.Scene {
       const none = () => ({ key: '', isPlaying: false, rate: 1, volume: 0, play() {}, stop() {}, setVolume() { return this; }, once(e, f) { if (e === 'complete' && f) setTimeout(f, 0); return this; } });
       this.sound.add = (k, c) => (has(k) ? add(k, c) : none()); this.sound.play = (k, c) => has(k) && play(k, c); }
     for (const [k, v] of Object.entries(PIX)) this.pix(k, v);
+    for (let i = 0; i < 3; i++) this.softEdge(`flame-${i}`); this.softEdge('fx-fireflight');          // (before the colours and the smaller copies: they take it with them)
     for (const k of ['blue', 'green', 'purple']) for (let i = 0; i < 3; i++) this.recolour(`flame-${i}`, k);          // (GPT's flame, in each fire's colour)
     for (const k of ['red', 'blue', 'green', 'purple']) for (let i = 0; i < 3; i++) { this.smaller(flameKey(i, k), '-m', 0.66); this.smaller(flameKey(i, k), '-s', 0.42); }
     this.oval('scorch', 18, 10, 'rgba(30,20,12,0.55)');
@@ -457,8 +534,9 @@ class Chapter1 extends Phaser.Scene {
 
     // the ground: one tile, each copy flipped at random so the repeat does not show
     const gw = this.textures.get('ground').getSourceImage().width;
-    for (let y = 0; y < H; y += gw) for (let x = 0; x < W; x += gw) this.add.image(x, y, 'ground').setOrigin(0).setFlip(Math.random() < 0.5, Math.random() < 0.5).setDepth(-1000);
-    this.footpath(); this.add.image(0, 0, 'footpath').setOrigin(0).setDepth(-990);
+    this.add.image(0, 0, 'grassfield').setOrigin(0).setDepth(-1000);          // THE GRASS: one picture of the whole ground, no tile - GPT's tufts cut out and scattered at random where a Gaussian density says (thick patches and thin, stretched 2:1 along the iso ground), back to front (tools/grassfield.py; the user: no square grid, no seams, a natural meadow)
+    // (the footpath is in the meadow's picture now: earth, two wheel ruts and gravel, rendered in 3D with it - tools/meadow3d.py)
+    this.add.image(0, 0, 'terrain').setOrigin(0).setDepth(-949);          // THE GROUND'S RISE AND FALL: a 3D height map's slopes lit by the props' sun, over the grass, the path and the burnt ground (tools/terrain.py)
     // the props: each from one of its four sides, at random - a tree that burns stands burnt from the same side
     const side = () => [0, 90, 180, 270][Phaser.Math.Between(0, 3)];
     for (const v of [0, 90, 180, 270]) this.burntBush(`bush-${v}`);
@@ -473,6 +551,22 @@ class Chapter1 extends Phaser.Scene {
       this.block = { w: c.width, h: c.height, s: W / c.width, on: Uint8Array.from({ length: c.width * c.height }, (_, i) => d[i * 4] > 127 ? 1 : 0) }; }
     const still = [...DECOR.filter((d) => d[2] !== 'bush'), ...ROCKS.map(([x, y]) => [x, y, 'rock']), ...MUSHROOMS.map(([x, y, c]) => [x, y, 'mushrooms', c])];
     this.decor = still.map(([x, y, k, caps]) => { const key = `${k}-${side()}`, im = this.add.image(x, y, key); this.shadowOf(key, x, y); if (k === 'mushrooms') im.hue = caps; return { x, y, kind: k, img: this.setProp(im, key).setDepth(y) }; });
+    // THE GRASS IN FRONT (the user: her feet hidden in the grass, and the trees' feet too). The meadow (tools/meadow3d.py) comes with its
+    // plants cut into strips by where each is rooted (GRASSFRONT: [root y, x, y, w, h, y in the picture]); a strip drawn at its root's
+    // depth covers whoever stands behind those plants. Only where it matters - a prop's foot (for good) and round each one walking (every
+    // frame, a few strips cropped to their feet) - so the meadow's shadows stay as they are everywhere else
+    this.gf = [];
+    if (typeof GRASSFRONT !== 'undefined' && this.textures.exists('grassfront')) {
+      const t = this.textures.get('grassfront'); GRASSFRONT.forEach((r, i) => { t.add('s' + i, 0, 0, r[5], r[3], r[4]); this.gf.push(r); });
+      const feet = (x, y, half, reach, depthOf) => { const out = []; for (let i = 0; i < this.gf.length; i++) { const r = this.gf[i]; if (r[0] <= y || r[0] > y + reach) continue; const a = Math.max(r[1], x - half), b = Math.min(r[1] + r[3], x + half); if (b <= a) continue; out.push([i, a, b]); } return out; };
+      this.gfFeet = feet;
+      for (const pr of [...this.trees, ...this.decor]) {          // (a prop's foot: its trunk's, a rock's, a stump's - as wide as its base, the plants just in front of it)
+        if (pr.kind === 'mushrooms') continue;          // (too low: the grass would hide half of them)
+        const half = pr.solid ? 16 : 12, reach = pr.solid ? 12 : 7;
+        for (const [i, a, b] of feet(pr.x, pr.y - 2, half, reach)) { const r = this.gf[i]; this.add.image(r[1], r[2], 'grassfront', 's' + i).setOrigin(0).setCrop(a - r[1], 0, b - a, r[4]).setDepth(r[0] + 0.25); }
+      }
+      this.gfPool = [];
+    }
     this.rocks = this.decor.filter((d) => d.kind === 'rock').map((d) => ({ x: d.x, y: d.y, r: 20, solid: true }));
     this.lightT = 0;
     // the dark: a quarter-size picture, scaled up 4x without smoothing (light in 4-pixel steps), over the world and under the rain
@@ -492,7 +586,7 @@ class Chapter1 extends Phaser.Scene {
     this.girlSpr = this.add.sprite(0, 0, 'carry-south-east', 0).setOrigin(0);
     this.trailSpr = this.add.sprite(0, 0, 'trail-downward-south-east', 0).setOrigin(0).setVisible(false);
 
-    this.monsters = []; this.shots = [];
+    this.monsters = []; this.shots = []; this.ghosts = [];
     this.wave = -1; this.state = 'title';
 
     this.keys = this.input.keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,J,R,ENTER,L');
@@ -649,9 +743,9 @@ class Chapter1 extends Phaser.Scene {
     this.stopT = 0;
     for (const m of this.monsters) this.dropMonster(m);
     for (const s of this.shots) s.obj.destroy();
-    this.monsters = []; this.shots = [];
+    this.monsters = []; this.shots = []; this.clearGhosts();
     for (const f of this.fire.values()) { f.spr.destroy(); f.gnd.destroy(); } this.fire.clear();
-    for (const a of this.ash.values()) a.destroy(); this.ash.clear(); for (const sc of this.scorches || []) sc.destroy(); this.scorches = [];
+    for (const a of this.ash.values()) a.destroy(); this.ash.clear(); this.burnClear(); for (const sc of this.scorches || []) sc.destroy(); this.scorches = [];
     this.clearPuddles();
     for (const tr of this.trees) { for (const fl of tr.flames || []) fl.destroy(); tr.flames = null; if (tr.glowG) { tr.glowG.destroy(); tr.glowG = null; } tr.state = tr.kind === 'tree-burnt' ? 'burnt' : 'green'; tr.burnT = 0; tr.saveT = 0; tr.img.clearTint(); this.setProp(tr.img, `${tr.kind}-${tr.v}`); tr.shadow.destroy(); tr.shadow = this.shadowOf(`${tr.kind}-${tr.v}`, tr.x, tr.y); }
     Object.assign(this.girl, { x: W / 2, y: H / 2 + 50, facing: 'south', show: 'south-east', attack: null, hearts: HEARTS, water: WATER_MAX, waterMax: WATER_MAX, hurtT: 0, push: [0, 0] });
@@ -665,7 +759,7 @@ class Chapter1 extends Phaser.Scene {
     if (this.wave >= WAVES.length) { this.state = 'clear'; this.jingle('jingle_win', () => this.playMusic('bgm_title')); /* (won: bright, then the lullaby as it is) */ this.showTitle(T('winTitle'), T('winSub', { score: this.total, best: this.saveBest() })); this.endGame(true); return; }
     this.wind = WINDS[Phaser.Math.Between(0, 3)];          // (a new wind each round)
     this.flash(T('roundFlash', { n: this.wave + 1, of: WAVES.length, arrow: `${this.wind > 0 ? '→' : '←'}${Math.abs(this.wind) > 0.8 ? (this.wind > 0 ? '→' : '←') : ''}` }));
-    this.round = { t0: this.time.now, hits: 0, burnt: 0, kills: 0 };
+    this.round = { t0: this.time.now, hits: 0, burnt: 0, kills: 0 }; this.clearGhosts();
     this.clearPuddles(); const n = Phaser.Math.Between(...PUDDLES); for (let i = 0; i < n; i++) this.makePuddle();
     if (WAVES[this.wave].some((m) => m.boss)) { this.sfx('jingle_boss_in', 0.6); this.time.delayedCall(1400, () => this.state === 'play' && this.playMusic('bgm_boss', 0.5)); }
     else this.playMusic('bgm_stage');
@@ -694,8 +788,8 @@ class Chapter1 extends Phaser.Scene {
     m.shadow = this.add.image(x, y, 'shadow-fire');
     m.light = [];          // (its light on the ground: drawDark, soft and in its own colour)
     m.glow = this.add.image(x, y, 'glow').setBlendMode(Phaser.BlendModes.ADD).setTint(K.glow).setAlpha(0.4);
-    m.spr = this.add.image(x, y, 'fire-normal' + sfx).setOrigin(0.5, 0.97).setAlpha(0);
-    m.over = this.add.image(x, y, 'fire-hurt' + sfx).setOrigin(0.5, 0.97).setVisible(false);   // the face it is turning from, shown on alternate frames
+    m.spr = this.add.image(x, y, 'fire-normal' + sfx, 0).setOrigin(0.5, 0.97).setAlpha(0);
+    m.over = this.add.image(x, y, 'fire-hurt' + sfx, 0).setOrigin(0.5, 0.97).setVisible(false);   // the face it is turning from, shown on alternate frames
     this.tweens.add({ targets: m.spr, alpha: 1, duration: 320, ease: 'Stepped', easeParams: [4] });          // (comes in by steps, not by growing)
     if (big) { m.crown = this.add.image(x, y, 'crown').setOrigin(0.5, 1); this.sfx('cry_boss_0', 0.7, x); this.cameras.main.shake(450, 0.006); }          /* (the boss comes: the ground shakes) */          // (the boss: a crown, and its own bar at the top)
     this.monsters.push(m);
@@ -770,13 +864,14 @@ class Chapter1 extends Phaser.Scene {
 
     this.updateMonsters(dt);
     this.updateShots(dt);
+    this.updateGhosts(dt);
 
     if (this.monsters.length === 0 && this.toSpawn === 0 && !this.waiting) {
-      this.waiting = true; this.roundDone();
+      this.waiting = true; this.roundDone(); for (const gh of this.ghosts) this.scatterGhost(gh, true);
       this.time.delayedCall(2600, () => { this.waiting = false; if (this.state === 'play') this.nextWave(); });
     }
-    this.updateItems(dt); this.updateProps(dt);
-    this.drawGirl(); this.drawRain(dt); this.drawUi();
+    this.updateItems(dt); this.updateProps(dt); this.burnRedraw(); this.grassFeet();
+    this.drawGirl(); this.reflections(); this.drawRain(dt); this.drawUi();
   }
 
   // A ROUND'S SCORE: the monsters put out, the time, the hits she took - and how little of the forest burned (the squares that caught
@@ -819,7 +914,7 @@ class Chapter1 extends Phaser.Scene {
 
   // the puddles: a picture each (big, then smaller as it dries: 2, 3, 4, gone); wet = the squares whose middle its picture covers
   wetAt(x, y) { return this.wet.has(this.cell(x, y).join(',')); }
-  clearPuddles() { for (const p of this.puddles) p.spr.destroy(); this.wet.clear(); this.puddles = []; }
+  clearPuddles() { for (const p of this.puddles) { p.spr.destroy(); this.dropRefl(p); } this.wet.clear(); this.puddles = []; }
   wetCells(p) {          // the squares under the puddle's picture now
     const img = this.textures.get(p.spr.texture.key).getSourceImage(), w = img.width, h = img.height;
     const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const c = cv.getContext('2d'); c.drawImage(img, 0, 0); const a = c.getImageData(0, 0, w, h).data;
@@ -845,6 +940,7 @@ class Chapter1 extends Phaser.Scene {
       const x = Phaser.Math.Between(70, W - 70), y = Phaser.Math.Between(TOP + 30, H - 40);
       if ([...this.trees, ...this.rocks].some((t) => Math.hypot(t.x - x, (t.y - y) * 1.5) < (t.solid ? 70 : 50)) || this.puddles.some((p) => Math.hypot(p.x - x, p.y - y) < 120)) continue;
       const p = { x, y, age: 0, stage: -1, spr: this.add.image(x, y, `puddle-${Phaser.Math.Between(0, 1)}`).setDepth(-945).setFlipX(Math.random() < 0.5).setAlpha(0) };
+      p.rid = (this.reflN = (this.reflN || 0) + 1);          // (its reflections: drawn into a canvas of its own each frame - reflections())
       this.tweens.add({ targets: p.spr, alpha: 1, duration: 600, ease: 'Stepped', easeParams: [3] });
       this.setWet(p); this.puddles.push(p); return;
     }
@@ -855,7 +951,7 @@ class Chapter1 extends Phaser.Scene {
       const stage = p.age < PUDDLE_DRY ? -1 : Math.floor((p.age - PUDDLE_DRY) / ((PUDDLE_LIFE - PUDDLE_DRY) / 4));          // (-1: as it came; 0..2: puddle 2, 3, 4; 3: gone)
       if (stage !== p.stage) {
         p.stage = stage;
-        if (stage >= 3) { p.spr.destroy(); for (const k of p.cells) this.wet.delete(k); p.cells = []; p.gone = true; continue; }
+        if (stage >= 3) { p.spr.destroy(); this.dropRefl(p); for (const k of p.cells) this.wet.delete(k); p.cells = []; p.gone = true; continue; }
         if (stage >= 0) { p.spr.setTexture(`puddle-${2 + stage}`); this.setWet(p); }
       }
     }
@@ -890,7 +986,7 @@ class Chapter1 extends Phaser.Scene {
       if (rad > 0 && (Math.abs(dc) + Math.abs(dr) > rad + 1 || (Math.abs(dc) + Math.abs(dr) > rad && Math.random() < 0.6) || (Math.max(Math.abs(dc), Math.abs(dr)) === rad && Math.random() < 0.25))) continue;          // (a blob, ragged at its edge - not a square of squares)
       if (this.fire.has(k) || this.ash.has(k) || this.wet.has(k) || this.fire.size >= FIRE_MAX || cy < TOP - 40 || cy > H - 8 || cx < 8 || cx > W - 8) continue;          // (ash does not burn again)
       if (this.trees.some((t) => Math.abs(t.x - cx) < t.r && Math.abs(t.y - cy) < t.r / 2 + 6)) continue;          // (not inside a trunk)
-      const v = 0, gnd = this.add.image(cx - DW / 2 - 8, cy - DH / 2 - 4, this.tileKey('burn', c, r)).setOrigin(0).setDepth(-950 - (Math.random() < 0.5 ? 0.1 : 0));
+      const v = 0, gnd = { setTexture: () => this.burnDirty(c, r), destroy: () => this.burnDirty(c, r) }; this.burnDirty(c, r);          // (its ground: the burnt layer's, drawn again when it changes)
       // a flame on about half the squares, anywhere in its square, each its own size and its own beat - not one flame stamped on a grid
       const fx = cx + Phaser.Math.Between(-9, 9), fy = cy + Phaser.Math.Between(-3, 5);
       const K = KINDS[kind], spr = this.add.image(fx, fy, flameKey(0, kind, '-s')).setOrigin(0.5, 1).setDepth(fy).setVisible(Math.random() < 0.5);
@@ -917,10 +1013,10 @@ class Chapter1 extends Phaser.Scene {
     for (const [k, f] of this.fire) {
       f.age += dt;
       if (f.age > f.life) { this.toAsh(k, f); continue; }
-      f.gnd.setTexture(this.tileKey((Math.floor(f.age * 4) + f.ph) % 3 === 0 ? 'burnB' : 'burn', f.c, f.r));          // (the embers flicker)
+      const br_ = (Math.floor(f.age * 4) + f.ph) % 3 === 0; if (br_ !== f.br) { f.br = br_; this.burnDirty(f.c, f.r); }          // (the embers flicker: its square drawn again when they do)
       if (Math.random() < dt * 0.5) { const [sx, sy] = this.centre(f.c, f.r); this.smoke(sx, sy - 6, Math.random() < 0.35); }          // (smoke, and steam where the rain falls on it)
       const u = f.age / f.life, sz = u < 0.1 || u > 0.88 ? '-s' : u < 0.25 || u > 0.7 || !f.big ? '-m' : '';          // (it catches small, burns up, dies down to a lick)
-      f.spr.setTexture(flameKey((Math.floor(f.age * f.fps) + f.ph) % 3, f.kind, sz)).setFlipX(Math.floor(f.age * f.fps * 0.4 + f.ph) % 2 === 0);
+      f.spr.setTexture(flameKey((Math.floor(f.age * f.fps) + f.ph) % 3, f.kind, sz)).setFlipX(Math.floor(f.age * f.fps * 0.4 + f.ph) % 2 === 0).setAlpha(WAVER[Math.floor(f.age * 4.5 + f.ph * 1.7) % 4]);
       if (spread && f.age > 2 && f.age < f.life - 3 && Math.random() < lerp(0.07, 0.12, HARD(this.wave)) * KINDS[f.kind].spread) { const [dc, dr] = this.downwind(); born.push([...this.centre(f.c + dc, f.r + dr), f.kind]); }
     }
     for (const [x, y, kd] of born) this.ignite(x, y, 0, kd);
@@ -937,7 +1033,7 @@ class Chapter1 extends Phaser.Scene {
       } else if (tr.state === 'burning') {
         tr.burnT += dt;
         if (tr.solid && tr.burnT >= TREE_SAVE && !tr.img.texture.key.startsWith('tree-half')) this.setProp(tr.img, `tree-half-${tr.v}`);          // (past saving: half of it gone)
-        tr.flames.forEach((fl, i) => fl.setTexture(flameKey((Math.floor(tr.burnT * 8) + i) % 3, 'red')).setFlipX((Math.floor(tr.burnT * 3) + i) % 2 === 0));
+        tr.flames.forEach((fl, i) => fl.setTexture(flameKey((Math.floor(tr.burnT * 8) + i) % 3, 'red')).setFlipX((Math.floor(tr.burnT * 3) + i) % 2 === 0).setAlpha(WAVER[Math.floor(tr.burnT * 4.5 + i * 1.3) % 4]));
         if (spread && Math.random() < (tr.solid ? 0.25 : 0.15)) { const s = tr.solid ? 28 : 14; this.ignite(tr.x + Phaser.Math.Between(-s, s), tr.y + Phaser.Math.Between(-6, 10)); }
         if (tr.burnT > (tr.solid ? 10 : 7)) this.burnOut(tr);
       }
@@ -959,6 +1055,7 @@ class Chapter1 extends Phaser.Scene {
       this.puff(tr.x, tr.y - (tr.solid ? 90 : 30), 4); this.say(tr.solid ? T('savedTree') : T('savedBush')); return;
     }
     const k = `${tr.base}-burnt-${tr.v}`; tr.state = 'burnt'; this.setProp(tr.img, k);
+    if (this.state === 'play' && Math.random() < (tr.solid ? GHOST.tree : GHOST.bush)) this.time.delayedCall(700, () => this.spawnGhost(tr.x, tr.y - (tr.solid ? 50 : 16)));          // (out of the smoke: a ghost)
     tr.shadow.destroy(); tr.shadow = this.shadowOf(k, tr.x, tr.y); /* (its shadow now the bare tree's) */ this.puff(tr.x, tr.y - (tr.solid ? 90 : 30), 6);
   }
 
@@ -1097,6 +1194,7 @@ class Chapter1 extends Phaser.Scene {
         this.douse(m, kx, ky / 2);
       }
     }
+    for (const gh of this.ghosts) if (!gh.dead && (inFan(gh.x, gh.y - 30) || inFan(gh.x, gh.y - 10))) { this.scatterGhost(gh); if (this.round) this.round.kills++; }
     for (const s of this.shots) if (!s.dead && inFan(s.x, s.y)) { s.dead = true; this.puff(s.x, s.y, 3); s.obj.destroy(); }
     for (const tr of this.trees) if (tr.state === 'burning' && wdist(tr.x - g.x, tr.y - g.y) < REACH + 40 && (inFan(tr.x, tr.y - 10) || inFan(tr.x, tr.y - (tr.solid ? 40 : 20)))) this.burnOut(tr);
     for (const f of [...this.fire.values()]) { const [x, y] = this.centre(f.c, f.r); if (wdist(x - g.x, y - g.y) < REACH && inFan(x, y + 14)) this.douseGround(x, y, a.id); }
@@ -1124,7 +1222,7 @@ class Chapter1 extends Phaser.Scene {
       if (m.big) this.time.delayedCall(600, () => { this.dropItem(m.x - 14, m.y, 'drop'); if (this.girl.waterMax < WATER_CAP) this.dropItem(m.x + 14, m.y, 'potion'); });          // (the boss: a drop and a potion)
       else if (Math.random() < DROP_CHANCE) this.time.delayedCall(600, () => this.dropItem(m.x, m.y, potion() ? 'potion' : 'drop'));
       if (m.crown) m.crown.destroy();
-      m.spr.setTexture('fire-dead' + m.sfx).setScale(1).setY(m.y).setTintFill(0xffffff);
+      m.spr.setTexture('fire-dead' + m.sfx, 0).setScale(1).setY(m.y).setTintFill(0xffffff);
       this.time.delayedCall(80, () => m.spr.clearTint());
       this.tweens.add({ targets: m.spr, x: { from: m.x - 2, to: m.x + 2 }, duration: 70, yoyo: true, repeat: 3, ease: 'Stepped', easeParams: [2] });
       this.tweens.add({ targets: m.glow, alpha: 0, duration: 500, ease: 'Stepped', easeParams: [3] });
@@ -1135,6 +1233,43 @@ class Chapter1 extends Phaser.Scene {
       m.face = 'hurt'; m.faceT = 0.38; this.sfx(['hurt_cute_0', 'hurt_cute_1'], 0.45);
     }
   }
+
+  // THE SMOKE GHOSTS (GHOST above)
+  spawnGhost(x, y) {
+    if (this.state !== 'play' || this.ghosts.filter((g_) => !g_.dead).length >= GHOST.max) return;
+    const gh = { x, y, age: 0, dead: false, cool: 0, ph: Math.random() * 6, kb: [0, 0], flip: false };
+    gh.sh = this.add.image(R(x), R(y), 'shadow-item').setAlpha(0.45).setDepth(-499);
+    gh.spr = this.add.sprite(R(x), R(y), 'ghost', 0).setOrigin(0.5, 0.86).setAlpha(0);
+    this.tweens.add({ targets: gh.spr, alpha: 1, duration: 500, ease: 'Stepped', easeParams: [4] }); this.puff(x, y - 30, 5); this.sfx('poof_0', 0.35, x);
+    this.ghosts.push(gh);
+  }
+  updateGhosts(dt) {
+    const g = this.girl;
+    for (const gh of this.ghosts) {
+      if (gh.dead) continue;
+      gh.age += dt; gh.cool = Math.max(0, gh.cool - dt);
+      if (gh.age > GHOST.life) { this.scatterGhost(gh, true); continue; }
+      const dx = g.x - gh.x, dy = (g.y - gh.y) * 2, d = Math.hypot(dx, dy) || 1, sp = GHOST.speed * (gh.cool > 0 ? -0.6 : 1);          // (after a touch: it drifts back)
+      gh.x += (dx / d * sp + Math.sin(gh.age * 1.3 + gh.ph) * 14 + gh.kb[0]) * dt; gh.y += (dy / d * sp * 0.5 + Math.cos(gh.age * 1.1 + gh.ph) * 6 + gh.kb[1]) * dt;          // (through the trees: no square stops it)
+      gh.kb[0] *= Math.pow(0.01, dt); gh.kb[1] *= Math.pow(0.01, dt); this.keepOut(gh);
+      if (Math.abs(dx) > 8) gh.flip = dx > 0;          // (drawn facing left: turned to her)
+      const bob = Math.sin(gh.age * 2.2 + gh.ph) * 3, fr = Math.floor((gh.age + gh.ph) * GHOST.fps) % 8;
+      gh.spr.setFrame(fr).setPosition(R(gh.x), R(gh.y - 8 + bob)).setFlipX(gh.flip).setDepth(gh.y);
+      gh.sh.setPosition(R(gh.x), R(gh.y)).setDepth(-499);
+      if (d < 34 && gh.cool <= 0 && g.hurtT <= 0) {          // a touch: cold - it takes water, not a heart
+        gh.cool = 1.6; g.water = Math.max(0, g.water - GHOST.drain); this.say(T('ghostChill')); this.sfx('error_0', 0.35, gh.x); this.puff(g.x, g.y - 40, 4);
+        g.push = [-dx / d * 120, -dy / d * 60]; gh.kb = [-dx / d * 160, -dy / d * 80];
+      }
+    }
+    this.ghosts = this.ghosts.filter((gh) => !gh.gone);
+  }
+  scatterGhost(gh, quiet = false) {          // (her water, or the round's end, or its own time up)
+    if (gh.dead) return; gh.dead = true;
+    if (!quiet) { this.sfx('poof_0', 0.55, gh.x); this.sfx(['hit_soft_0', 'hit_soft_1'], 0.35, gh.x); this.drops(gh.x, gh.y - 30, 0, 0, 8); }
+    this.puff(gh.x, gh.y - 30, quiet ? 4 : 9);
+    this.tweens.add({ targets: [gh.spr, gh.sh], alpha: 0, y: '-=10', duration: quiet ? 600 : 360, ease: 'Stepped', easeParams: [4], onComplete: () => { gh.spr.destroy(); gh.sh.destroy(); gh.gone = true; } });
+  }
+  clearGhosts() { for (const gh of this.ghosts || []) { gh.spr.destroy(); gh.sh.destroy(); } this.ghosts = []; }
 
   dropMonster(m) { for (const o of [m.spr, m.over, m.glow, m.shadow, m.crown, ...(m.light || [])]) if (o) o.destroy(); }
 
@@ -1224,13 +1359,13 @@ class Chapter1 extends Phaser.Scene {
       if (m.face === 'hurt' && (m.faceT -= dt) <= 0) { m.face = 'normal'; m.fadeT = 0.14; }
       m.fadeT = Math.max(0, m.fadeT - dt); m.flashT = Math.max(0, m.flashT - dt);
       // squash and stretch by WHOLE PIXELS: a few rows taken off or put on the art's height, a few columns on its width
-      const tex = this.textures.get(`fire-${m.face}${m.sfx}`).getSourceImage(), tw = tex.width, th = tex.height;
+      const [tw, th] = FIRE_FRAME[m.face], fi = Math.floor(this.time.now / 1000 * 9 + m.wobble * 3) % 8;          // (its frame: the see-through waver)
       let dh = R(3 * a - 6 * q), dw = R(-2 * a + 5 * q);
       if (m.pulse > 0) { const u = m.pulse / 0.28, wv = Math.cos((1 - u) * 9) * u; dh -= R(8 * wv); dw += R(8 * wv); m.pulse -= dt; }
       if (Math.abs(dx) > 12) m.flip = dx < 0;
       const X = R(m.x), Y = R(m.y - m.hop), sx = (tw + dw) / tw, sy = (th + dh) / th;
       const showOld = m.fadeT > 0 && Math.floor(m.fadeT * 40) % 2 === 0;
-      m.spr.setTexture(showOld ? `fire-hurt${m.sfx}` : `fire-${m.face}${m.sfx}`).setPosition(X, Y).setScale(sx, sy).setFlipX(m.flip).setDepth(m.y);
+      m.spr.setTexture(showOld ? `fire-hurt${m.sfx}` : `fire-${m.face}${m.sfx}`, fi).setPosition(X, Y).setScale(sx, sy).setFlipX(m.flip).setDepth(m.y);
       if (m.flashT > 0) m.spr.setTintFill(0xffffff); else m.spr.clearTint();
       // the glow flickers by steps
       const fl = [1, 1, 0.9, 1.1][Math.floor(m.wobble * 12) % 4];
@@ -1258,7 +1393,7 @@ class Chapter1 extends Phaser.Scene {
       s.x += s.vx * dt; s.y += s.vy * dt; s.life -= dt;
       // it flies ~35 px off the ground: drawn in front of what stands behind its spot on the ground, behind what stands in front
       const gy = s.y + SHOT_UP;
-      s.t += dt; s.obj.setPosition(R(s.x), R(s.y)).setFrame(Math.floor(s.t * 1000 / FX.fireflight.ms) % FX.fireflight.n).setDepth(gy + 0.5);          // (its flight's own frames)
+      s.t += dt; s.obj.setPosition(R(s.x), R(s.y)).setFrame(Math.floor(s.t * 1000 / FX.fireflight.ms) % FX.fireflight.n).setDepth(gy + 0.5).setAlpha(WAVER[Math.floor(s.t * 6) % 4]);          // (its flight's own frames)
       // COVER: whatever of a prop stands at the fireball's height (its 3D model, cut there: a trunk, a rock, a bush - not a crown,
       // not a mushroom) stops it - sparks; a green or half-burnt tree or bush it strikes may catch
       const wall = this.struck(s.x, gy);
@@ -1336,6 +1471,8 @@ class Chapter1 extends Phaser.Scene {
     const wince = !g.attack && g.hurtT > 0.85;
     if (wince) spr.setTexture(`hurt-${g.show}`); else spr.setTexture(anim, fr);
     spr.setPosition(left, top).setDepth(g.y);
+    // her reflection's picture (seen from below: refl-*, tools/reflect_girl.py) and where it goes - drawn by reflections()
+    { const rk = !wince && this.textures.exists(`refl-${anim}`) ? `refl-${anim}` : `refl-stand-${g.show}`; const rfr = rk === `refl-${anim}` ? fr : 0; this.girlRefl = { key: rk, frame: rfr, x: X - PX.ax, top: Y - PX.ay + REFL[rk.slice(5)][rfr], show: spr.visible }; }          // (from the ground's own line down, as it is: tools/reflect_girl.py turned it over there)
     // in a prop's shade she is darker - her top by what shades her head and middle, her feet by what shades them; in steps, as pixel art
     const sh = [0.05, 0.6, 1.1].map((h) => this.shadeOn(g.x, g.y, h)), tone = (a) => { const v = Math.round((1 - 0.95 * a) * 8) / 8; return Phaser.Display.Color.GetColor(v * 255, v * 255, Math.min(255, v * 270)); };
     const topT = tone((sh[2] + sh[1]) / 2), botT = tone((sh[1] + sh[0]) / 2); spr.setTint(topT, topT, botT, botT); this.trailSpr.setTint(topT, topT, botT, botT);

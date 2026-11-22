@@ -1,0 +1,2 @@
+// her reflection: each frame's row of the ground's line in her sprite (tools/reflect_girl.py) - the reflection frame is drawn from there down
+const REFL = {"carry-south-east": [116, 116, 116, 116, 115, 116, 113, 114], "carry-south-west": [115, 113, 114, 116, 114, 115, 112, 112], "carry-north-east": [116, 115, 114, 114, 114, 113, 114, 115], "carry-north-west": [115, 116, 116, 114, 115, 116, 115, 116], "stand-south-east": [115, 114, 115], "stand-south-west": [115, 115, 115], "stand-north-east": [116, 115, 115], "stand-north-west": [116, 115, 116]};

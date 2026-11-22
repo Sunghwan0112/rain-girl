@@ -24,6 +24,7 @@ Ten rounds; the last has a crowned blue boss. Arrow keys / WASD move, Space / J 
 | Rocks | three boulders: walked round, like a tree trunk |
 | Bushes | catch the same way, burn ~7 s, saved within 4 s; walked through, not round |
 | Puddles | 2-3 a round, somewhere new; fire does not catch on them, fireballs die in them; a fire monster landing in one loses 1 hp and boils 4 s of the puddle's life away; dry up 22-35 s in |
+| Smoke ghosts | rise from a tree or bush burnt through (60 % / 30 %), three at most; float through the trees at her; a touch takes 45 water, not a heart, and drifts it back; one hit of her water scatters it; gone at the round's end |
 | Drops | a monster put out leaves something half the time: a **heart** (a life back and 40 water) or - 40 % of those, while the tank can still grow - a **potion** (a violet flask with a gold cap and a twinkle: the tank 25 bigger, to 300, and 60 water more). The boss leaves both |
 
 ### The fires
@@ -59,6 +60,11 @@ The hook stays in the game for this: `window.BOT = (scene) => [dx, dy, swing]`, 
 | Her water | the swing's effect rendered in 3D and turned into pixel art by SpriteCast, every facing; the combo's two moves are Mixamo motion capture ("Standing Melee Attack Downward", "... Backhand") carried onto her rig, made a sword's cut and joined with SpriteCast's motion.py, the water fading out at twice her height |
 | The wince | the standing frame with the eyes squeezed shut, by rule (`tools/make_hurt.py`) |
 | Fire monster (three faces) | its 3D model baked to a picture, then drawn as pixel art by an image model; the other colours by moving its channels round in code |
+| See-through fire and ghosts | each face 8 frames, made see-through by its 3D model's thickness (thin tips fade, now and then more) - SpriteCast translucent; the flames on the ground and the fireballs by their edge, wavering |
+| Smoke ghost | a Tripo model given a few bones (tail and arms), a loop of poses rendered and drawn as pixel art four to a sheet - SpriteCast proprig / propanim |
+| The meadow and the path | rendered in 3D at the game's camera and sun: four Tripo ground plants (grass, fern, wildflowers, clover) planted by a Gaussian density, earth with wheel ruts and gravel for the path, in the props' palette (tools/meadow3d.py); the plants cut into strips by their roots, so her feet and the props' feet stand in the grass |
+| The ground's rise and fall | a 3D height map's slopes lit by the props' sun, laid over everything on the ground (tools/terrain.py) |
+| Puddles (art) | a shallow hollow of water worked out per pixel - depth, the sky and the trees' shade in it at the camera's angle, a wet rim; and her reflection in it: her rig rendered from below (as the water's mirror sees her), turned over about the ground's line, cut to the water |
 | Ground tile, burning ground, ash, flames, crown, puddles | drawn as pixel art by an image model on a grid and read back at the grid it drew |
 | Trees (green, half burnt, burnt), bushes, stumps, rocks, mushrooms | SpriteCast: a 3D model each (Tripo) rendered at the girl's angle and scale (74 px a metre: a tree 2.4 m is ~175 px), from four sides, each drawn as pixel art; white specks the cut-out left cleared by the render; all on one 48-colour palette with the ground (`tools/sync_props.py`). A burnt bush is the bush's pixels taken to charcoal in code. Each prop shows one side at random; a tree that burns stands burnt from the same side (`assets/px/props/`, `foot.js` - where each stands) |
 | The footpath | an earth tile drawn as pixel art by an image model (beside the grass tile, to match it); the path - a winding band along the ground's 2:1 - cut from it in code, its edge ragged in 2-pixel steps with a darker rim and grass leaning over |
